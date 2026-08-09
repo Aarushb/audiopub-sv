@@ -37,6 +37,7 @@ import { v4 as uuidv4, v4 } from "uuid";
 import * as dotenv from "dotenv";
 import Audio from "./audio";
 import Comment from "./comment";
+import Playlist from "./playlist";
 import type { ClientsideUser } from "$lib/types";
 dotenv.config();
 
@@ -125,6 +126,9 @@ export default class User extends Model {
 
   @HasMany(() => Comment)
   declare comments?: Comment[];
+
+  @HasMany(() => Playlist)
+  declare playlists?: Playlist[];
 
   get isVerified() {
     return !this.verificationToken;

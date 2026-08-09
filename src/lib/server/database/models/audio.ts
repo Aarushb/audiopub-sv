@@ -31,6 +31,7 @@ import {
     ForeignKey,
     BelongsTo,
     HasMany,
+    BelongsToMany,
     Sequelize,
 } from "sequelize-typescript";
 import Mime from "mime-types";
@@ -38,6 +39,8 @@ import User, { type UserInfo } from "./user";
 import Comment from "./comment";
 import PlaysTracker from "./plays_tracker";
 import AudioFavorite from "./audio_favorite";
+import Playlist from "./playlist";
+import PlaylistAudio from "./playlist_audio";
 import type { ClientsideAudio } from "$lib/types";
 
 export interface AudioInfo {
@@ -88,6 +91,11 @@ export default class Audio extends Model {
     @Column(DataType.BOOLEAN)
     declare isFromAi: boolean;
 
+    @AllowNull(false)
+    @Default(false)
+    @Column(DataType.BOOLEAN)
+    declare isLiveArchive: boolean;
+
     @ForeignKey(() => User)
     @Column(DataType.UUID)
     declare userId: string;
@@ -100,6 +108,9 @@ export default class Audio extends Model {
 
     @HasMany(() => AudioFavorite)
     declare audioFavorites?: AudioFavorite[];
+
+    @BelongsToMany(() => Playlist, () => PlaylistAudio)
+    declare playlists?: Playlist[];
 
     get path(): string {
         return `audio/${this.id}`;
@@ -166,8 +177,10 @@ export default class Audio extends Model {
             playsString: this.playsString,
             favoriteCount: favoriteCount ?? 0,
             isFavorited: isFavorited,
-            createdAt: this.createdAt.getTime(),
+            isLiveArchive: this.isLiveArchive || false,
+            createdAt: this.createdAt ? this.createdAt.getTime() : Date.now(),
             user: includeUser ? this.user?.toClientside() : undefined,
+            playlists: this.playlists ? this.playlists.map(p => ({ id: p.id, name: p.name })) : undefined,
         };
     }
 

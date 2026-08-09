@@ -25,6 +25,15 @@ export interface ClientsideUser {
     isTrusted: boolean;
 }
 
+export interface ClientsidePlaylist {
+    id: string;
+    name: string;
+    createdAt: number;
+    user?: ClientsideUser;
+    audios?: ClientsideAudio[];
+    trackCount?: number;
+}
+
 export interface ClientsideAudio {
     id: string;
     title: string;
@@ -37,9 +46,11 @@ export interface ClientsideAudio {
     playsString: string;
     favoriteCount: number;
     isFavorited?: boolean;
+    isLiveArchive?: boolean;
     createdAt: number;
     user?: ClientsideUser;
     comments?: ClientsideComment[];
+    playlists?: { id: string; name: string }[];
 }
 
 export interface ClientsideComment {
