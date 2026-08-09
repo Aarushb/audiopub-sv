@@ -28,7 +28,9 @@
     let autoplayEnabled = true;
 
     onMount(() => {
-        title.set(data.audio.title);
+        if (data.audio) {
+            title.set(data.audio.title);
+        }
         const stored = localStorage.getItem("audiopub_autoplay");
         if (stored !== null) {
             autoplayEnabled = stored === "true";
@@ -50,7 +52,9 @@
     }
 
     const handlePlay = () => {
-        fetch(`/listen/${data.audio.id}/try_register_play`, { method: "POST" }).catch(() => {});
+        if (data.audio) {
+            fetch(`/listen/${data.audio.id}/try_register_play`, { method: "POST" }).catch(() => {});
+        }
     };
 
     const handleEnded = () => {
@@ -60,13 +64,14 @@
     };
 
     $: favoritesString = (() => {
-        const count = data.audio.favoriteCount || 0;
+        const count = data.audio?.favoriteCount || 0;
         if (count === 0) return "No favorites";
         if (count === 1) return "1 favorite";
         return `${count} favorites`;
     })();
 </script>
 
+{#if data.audio}
 <h1>{data.audio.title}</h1>
 
 <div class="audio-player">
@@ -197,6 +202,7 @@
         </form>
     {/if}
 </div>
+{/if}
 
 <style>
     /* Styling for the main title */

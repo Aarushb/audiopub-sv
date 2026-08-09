@@ -627,14 +627,18 @@
                 // Crossfade mode: start with volume 0 and filters ready
                 newSlot.fadeType = 'in';
                 newSlot.filterNode.type = 'highpass';
-                newSlot.filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
-                newSlot.gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                if (audioContext) {
+                    newSlot.filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
+                    newSlot.gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                }
             } else {
                 // Direct play mode: set up for immediate play
                 newSlot.fadeType = null;
                 newSlot.filterNode.type = 'lowpass';
-                newSlot.filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
-                newSlot.gainNode.gain.setValueAtTime(1, audioContext.currentTime);
+                if (audioContext) {
+                    newSlot.filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
+                    newSlot.gainNode.gain.setValueAtTime(1, audioContext.currentTime);
+                }
             }
             
             // Step 7: Start playback and wait for actual audio output
@@ -1269,10 +1273,11 @@
             case 's':
             case 'S':
                 if (browser) {
+                    const activeAudioId = audios[currentIndex]?.id || '';
                     if (navigator.share) {
-                        navigator.share({url: `/listen/${audio.id}`});
+                        navigator.share({url: `/listen/${activeAudioId}`});
                     } else if (navigator.clipboard) {
-                        navigator.clipboard.writeText(window.location.origin + `/listen/${audio.id}`);
+                        navigator.clipboard.writeText(window.location.origin + `/listen/${activeAudioId}`);
                     }
                 }
                 break;
@@ -1750,7 +1755,7 @@
                     {#if currentAudio.comments && currentAudio.comments.length > 0}
                         <CommentList 
                             comments={currentAudio.comments} 
-                            user={currentUser} 
+                            user={currentUser || undefined} 
                             isAdmin={false}
                         />
                     {:else}
@@ -1778,7 +1783,7 @@
                                         // Add the new comment to local state with proper reactivity
                                         audios[currentIndex] = {
                                             ...audios[currentIndex],
-                                            comments: [...(audios[currentIndex].comments || []), result.data.comment]
+                                            comments: [...(audios[currentIndex].comments || []), result.data.comment as ClientsideComment]
                                         };
                                         
                                         // Trigger reactivity explicitly

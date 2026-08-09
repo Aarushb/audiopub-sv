@@ -113,10 +113,11 @@ export const load: PageServerLoad = async (event) => {
 
         isFollowing = results[0];
         favoriteCount = results[1];
-        isFavorited = results[2];
     } catch (err) {
         console.error('Error fetching audio interaction data:', err);
         // Continue with default values
+    }
+
     const nextAudio = await Audio.findOne({
         where: {
             createdAt: { [Op.lt]: audio.createdAt },

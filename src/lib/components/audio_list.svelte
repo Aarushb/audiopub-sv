@@ -32,15 +32,7 @@
         localStorage.setItem("audiopub_autoplay", String(autoplayEnabled));
     }
 
-    let itemComponents: Map<string, AudioItem> = new Map();
-
-    function setItemRef(id: string, comp: AudioItem | null) {
-        if (comp) {
-            itemComponents.set(id, comp);
-        } else {
-            itemComponents.delete(id);
-        }
-    }
+    let itemComponents: Record<string, AudioItem> = {};
 
     function handleTrackEnded(currentIndex: number) {
         if (!autoplayEnabled || !audios || currentIndex >= audios.length - 1) {
@@ -48,7 +40,7 @@
         }
         const nextAudio = audios[currentIndex + 1];
         if (nextAudio) {
-            const nextComp = itemComponents.get(nextAudio.id);
+            const nextComp = itemComponents[nextAudio.id];
             if (nextComp) {
                 nextComp.playAudio();
             }
@@ -142,7 +134,7 @@
 <section class="audio-list">
     {#each audios as audio, index (audio.id)}
         <AudioItem
-            bind:this={itemComponents.get(audio.id) as any}
+            bind:this={itemComponents[audio.id]}
             {audio}
             {currentUser}
             onEnded={() => handleTrackEnded(index)}
