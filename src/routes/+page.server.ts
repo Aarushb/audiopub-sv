@@ -86,8 +86,12 @@ export const load: PageServerLoad = async (event) => {
     const audioWhere: any = {};
     if (filterClips && !filterArchives) {
         audioWhere.isLiveArchive = false;
+        audioWhere.archivedStreamId = { [Op.is]: null };
     } else if (!filterClips && filterArchives) {
-        audioWhere.isLiveArchive = true;
+        audioWhere[Op.or] = [
+            { isLiveArchive: true },
+            { archivedStreamId: { [Op.ne]: null } },
+        ];
     } else if (!filterClips && !filterArchives) {
         audioWhere.id = null; // matches nothing
     }

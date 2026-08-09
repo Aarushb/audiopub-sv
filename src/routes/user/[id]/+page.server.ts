@@ -44,14 +44,17 @@ export const load: PageServerLoad = async (event) => {
 
     const [clipsData, archivesData, playlistsData, activeStream, subscribersCount] = await Promise.all([
         Audio.findAndCountAll({
-            where: { userId: profileUser.id, isLiveArchive: false },
+            where: { userId: profileUser.id, isLiveArchive: false, archivedStreamId: { [Op.is]: null } },
             include: [Playlist, User],
             limit,
             offset,
             order: [["createdAt", "DESC"]],
         }),
         Audio.findAndCountAll({
-            where: { userId: profileUser.id, isLiveArchive: true },
+            where: {
+                userId: profileUser.id,
+                [Op.or]: [{ isLiveArchive: true }, { archivedStreamId: { [Op.ne]: null } }],
+            },
             include: [Playlist, User],
             limit,
             offset,

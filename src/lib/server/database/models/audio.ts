@@ -190,7 +190,7 @@ export default class Audio extends Model {
             playsString: this.playsString,
             favoriteCount: favoriteCount ?? 0,
             isFavorited: isFavorited,
-            isLiveArchive: this.isLiveArchive || false,
+            isLiveArchive: this.isLiveArchive || (this.archivedStreamId !== null && this.archivedStreamId !== undefined),
             createdAt: this.createdAt ? this.createdAt.getTime() : Date.now(),
             user: includeUser ? this.user?.toClientside() : undefined,
             playlists: this.playlists ? this.playlists.map(p => ({ id: p.id, name: p.name })) : undefined,

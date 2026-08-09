@@ -21,6 +21,7 @@ import type { PageServerLoad } from "./$types";
 import { User, Audio, Playlist } from "$lib/server/database";
 import { hash } from "bcrypt";
 import { v4 as uuidv4 } from "uuid";
+import { Op } from "sequelize";
 
 export const load: PageServerLoad = async (event) => {
     const user = event.locals.user;
@@ -36,14 +37,17 @@ export const load: PageServerLoad = async (event) => {
 
     const [clipsData, archivesData, playlistsData] = await Promise.all([
         Audio.findAndCountAll({
-            where: { userId: user.id, isLiveArchive: false },
+            where: { userId: user.id, isLiveArchive: false, archivedStreamId: { [Op.is]: null } },
             include: [Playlist, User],
             limit,
             offset,
             order: [["createdAt", "DESC"]],
         }),
         Audio.findAndCountAll({
-            where: { userId: user.id, isLiveArchive: true },
+            where: {
+                userId: user.id,
+                [Op.or]: [{ isLiveArchive: true }, { archivedStreamId: { [Op.ne]: null } }],
+            },
             include: [Playlist, User],
             limit,
             offset,
