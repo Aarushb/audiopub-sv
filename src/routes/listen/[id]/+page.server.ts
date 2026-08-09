@@ -117,13 +117,19 @@ export const load: PageServerLoad = async (event) => {
     } catch (err) {
         console.error('Error fetching audio interaction data:', err);
         // Continue with default values
-    }
+    const nextAudio = await Audio.findOne({
+        where: {
+            createdAt: { [Op.lt]: audio.createdAt },
+        },
+        order: [["createdAt", "DESC"]],
+    });
 
     return {
         audio: audio.toClientside(true, favoriteCount, isFavorited),
         comments: comments.map((c) => c.toClientside(false)),
         mimeType: audio.mimeType,
         isFollowing,
+        nextAudioId: nextAudio ? nextAudio.id : null,
     };
 };
 

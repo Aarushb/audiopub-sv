@@ -22,6 +22,19 @@
 
     export let audio: ClientsideAudio;
     export let currentUser: ClientsideUser | null = null;
+    export let onEnded: (() => void) | undefined = undefined;
+
+    let audioElement: HTMLAudioElement | null = null;
+
+    export function playAudio() {
+        if (audioElement) {
+            audioElement.play().catch(() => {});
+        }
+    }
+
+    const handlePlay = () => {
+        fetch(`/listen/${audio.id}/try_register_play`, { method: "POST" }).catch(() => {});
+    };
 
     $: favoritesString = (() => {
         const count = audio.favoriteCount || 0;
@@ -39,6 +52,22 @@
         <a href={`/listen/${audio.id}`}>{audio.title}</a>
         <span class="stats"> | {audio.playsString} | {favoritesString}</span>
     </h3>
+
+    <div class="item-player-container">
+        <audio
+            bind:this={audioElement}
+            controls
+            id={`player-${audio.id}`}
+            on:play={handlePlay}
+            on:ended={onEnded}
+            preload="metadata"
+        >
+            <source src={`/${audio.path}`} type="audio/aac" />
+            <source src={`/${audio.transcodedPath}`} type="audio/aac" />
+            Your browser does not support the audio element.
+        </audio>
+    </div>
+
     <p>
         {#if audio.playlists && audio.playlists.length > 0}
             <span class="playlist-info">
@@ -59,7 +88,9 @@
     .audio-item {
         margin-bottom: 20px;
         border: 1px solid #ccc;
-        padding: 10px;
+        padding: 12px;
+        border-radius: 6px;
+        background: #fff;
     }
 
     h3 {
@@ -72,5 +103,14 @@
         font-weight: normal;
         margin-left: 0.5em;
         white-space: nowrap;
+    }
+
+    .item-player-container {
+        margin: 8px 0;
+    }
+
+    .item-player-container audio {
+        width: 100%;
+        height: 40px;
     }
 </style>

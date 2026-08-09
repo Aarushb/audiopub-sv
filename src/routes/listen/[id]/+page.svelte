@@ -24,9 +24,39 @@
     import CommentList from "$lib/components/comment_list.svelte";
     import title from "$lib/title";
     import SafeMarkdown from "$lib/components/safe_markdown.svelte";
-    onMount(() => title.set(data.audio.title));
+
+    let autoplayEnabled = true;
+
+    onMount(() => {
+        title.set(data.audio.title);
+        const stored = localStorage.getItem("audiopub_autoplay");
+        if (stored !== null) {
+            autoplayEnabled = stored === "true";
+        }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get("autoplay") === "true") {
+            const player = document.getElementById("player") as HTMLAudioElement | null;
+            if (player) {
+                player.play().catch(() => {});
+            }
+        }
+    });
+
+    function toggleAutoplay(e: Event) {
+        const target = e.target as HTMLInputElement;
+        autoplayEnabled = target.checked;
+        localStorage.setItem("audiopub_autoplay", String(autoplayEnabled));
+    }
+
     const handlePlay = () => {
-        fetch(`/listen/${data.audio.id}/try_register_play`, { method: "POST" });
+        fetch(`/listen/${data.audio.id}/try_register_play`, { method: "POST" }).catch(() => {});
+    };
+
+    const handleEnded = () => {
+        if (autoplayEnabled && data.nextAudioId) {
+            window.location.href = `/listen/${data.nextAudioId}?autoplay=true`;
+        }
     };
 
     $: favoritesString = (() => {
@@ -40,7 +70,20 @@
 <h1>{data.audio.title}</h1>
 
 <div class="audio-player">
-    <audio controls id="player" on:play={handlePlay}>
+    <div class="autoplay-container">
+        <label class="autoplay-label" for="autoplay-toggle">
+            <input
+                type="checkbox"
+                id="autoplay-toggle"
+                role="switch"
+                aria-checked={autoplayEnabled}
+                checked={autoplayEnabled}
+                on:change={toggleAutoplay}
+            />
+            Autoplay Next Track
+        </label>
+    </div>
+    <audio controls id="player" on:play={handlePlay} on:ended={handleEnded}>
         <source src="/{data.audio.path}" type={data.mimeType} />
         <source src="/{data.audio.transcodedPath}" type="audio/aac" />
         <p>Your browser doesn't support the audio element.</p>
@@ -166,6 +209,21 @@
     /* Styling for the audio player section */
     .audio-player {
         margin-bottom: 1rem;
+    }
+
+    .autoplay-container {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 8px;
+    }
+
+    .autoplay-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: bold;
+        color: #444;
+        cursor: pointer;
     }
 
     /* Styling for the audio controls */
