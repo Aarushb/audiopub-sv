@@ -2,10 +2,11 @@
     import AudioList from "$lib/components/audio_list.svelte";
     import StreamCard from "$lib/components/stream_card.svelte";
     import title from "$lib/title";
-    import type { PageProps } from "./$types";
-    title.set("Subscriptions")
+    import { onMount } from "svelte";
 
-    let { data }: PageProps = $props();
+    export let data;
+
+    onMount(() => title.set("Subscriptions"));
 </script>
 
 <h1>Subscriptions</h1>

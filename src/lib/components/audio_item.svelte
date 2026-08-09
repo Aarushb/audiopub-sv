@@ -51,9 +51,9 @@
                 { src: `/${audio.transcodedPath}`, type: "audio/aac" }
             ]}
             on:play={handlePlay}
-            on:ended={onEnded}
-            on:next={onNext}
-            on:prev={onPrev}
+            on:ended={() => onEnded && onEnded()}
+            on:next={() => onNext && onNext()}
+            on:prev={() => onPrev && onPrev()}
         />
     </div>
 

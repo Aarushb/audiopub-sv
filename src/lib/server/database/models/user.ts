@@ -275,6 +275,7 @@ export default class User extends Model {
             isBanned: this.isBanned,
             isVerified: this.isVerified,
             isTrusted: this.isTrusted,
+            isAdmin: this.isAdmin,
         };
     }
 

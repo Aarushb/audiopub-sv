@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
+    import { createEventDispatcher, onMount } from "svelte";
 
     export let sources: { src: string; type: string }[] = [];
     export let live = false;
@@ -11,6 +11,8 @@
         play: void;
         pause: void;
         ended: void;
+        next: void;
+        prev: void;
     }>();
 
     let isPlaying = false;
@@ -20,8 +22,22 @@
     let volume = 1;
     let muted = false;
     let playbackRate = 1;
+    let autoplayEnabled = true;
 
     const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
+    onMount(() => {
+        const stored = localStorage.getItem("audiopub_autoplay");
+        if (stored !== null) {
+            autoplayEnabled = stored === "true";
+        }
+    });
+
+    function toggleAutoplay(e: Event) {
+        const target = e.target as HTMLInputElement;
+        autoplayEnabled = target.checked;
+        localStorage.setItem("audiopub_autoplay", String(autoplayEnabled));
+    }
 
     function togglePlay() {
         if (!audioElement) return;
@@ -83,9 +99,9 @@
     function onKeydown(event: KeyboardEvent) {
         if (event.altKey || event.ctrlKey || event.metaKey) return;
 
-        // Don't hijack keys while focus is on the sliders themselves.
+        // Don't hijack keys while focus is on an input or textarea
         const target = event.target as HTMLElement;
-        if (target?.tagName === "INPUT") return;
+        if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") return;
 
         switch (event.key) {
             case " ":
@@ -106,6 +122,16 @@
                     event.preventDefault();
                     seek(10);
                 }
+                break;
+            case "n":
+            case "N":
+                event.preventDefault();
+                dispatch("next");
+                break;
+            case "p":
+            case "P":
+                event.preventDefault();
+                dispatch("prev");
                 break;
             case "m":
                 event.preventDefault();
@@ -165,6 +191,18 @@
             <button
                 type="button"
                 class="ctrl"
+                on:click={() => dispatch("prev")}
+                aria-label="Previous track (P)"
+                title="Previous track (P)"
+            >
+                <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                    <polygon points="6,6 6,18 8,18 8,6" fill="currentColor" />
+                    <polygon points="18,6 9,12 18,18" fill="currentColor" />
+                </svg>
+            </button>
+            <button
+                type="button"
+                class="ctrl"
                 on:click={() => seek(-10)}
                 aria-label="Rewind 10 seconds"
             >
@@ -211,6 +249,18 @@
                         fill="currentColor"
                         d="M12 5V1l5 5-5 5V7a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8z"
                     />
+                </svg>
+            </button>
+            <button
+                type="button"
+                class="ctrl"
+                on:click={() => dispatch("next")}
+                aria-label="Next track (N)"
+                title="Next track (N)"
+            >
+                <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                    <polygon points="6,6 15,12 6,18" fill="currentColor" />
+                    <polygon points="16,6 16,18 18,18 18,6" fill="currentColor" />
                 </svg>
             </button>
         {/if}
@@ -276,6 +326,18 @@
             aria-label="Volume"
             aria-valuetext="{muted ? 0 : volume * 100}%"
         />
+
+        <label class="autoplay-toggle-label" for="player-autoplay">
+            <input
+                type="checkbox"
+                id="player-autoplay"
+                role="switch"
+                aria-checked={autoplayEnabled}
+                checked={autoplayEnabled}
+                on:change={toggleAutoplay}
+            />
+            Autoplay
+        </label>
     </div>
 </section>
 
@@ -361,6 +423,17 @@
         min-width: 50px;
         accent-color: #007bff;
         cursor: pointer;
+    }
+
+    .autoplay-toggle-label {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #444;
+        cursor: pointer;
+        margin-left: 0.5rem;
     }
 
     .live-badge {

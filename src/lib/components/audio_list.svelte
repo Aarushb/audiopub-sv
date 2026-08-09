@@ -17,32 +17,38 @@
     export let page: number = 1;
     export let totalPages: number = 0;
 
-    let autoplayEnabled = true;
-
-    onMount(() => {
-        const stored = localStorage.getItem("audiopub_autoplay");
-        if (stored !== null) {
-            autoplayEnabled = stored === "true";
-        }
-    });
-
-    function toggleAutoplay(e: Event) {
-        const target = e.target as HTMLInputElement;
-        autoplayEnabled = target.checked;
-        localStorage.setItem("audiopub_autoplay", String(autoplayEnabled));
-    }
-
     let itemComponents: Record<string, AudioItem> = {};
 
+    function isAutoplayEnabled() {
+        const stored = localStorage.getItem("audiopub_autoplay");
+        return stored !== "false";
+    }
+
     function handleTrackEnded(currentIndex: number) {
-        if (!autoplayEnabled || !audios || currentIndex >= audios.length - 1) {
+        if (!isAutoplayEnabled() || !audios || currentIndex >= audios.length - 1) {
             return;
         }
+        handleNextTrack(currentIndex);
+    }
+
+    function handleNextTrack(currentIndex: number) {
+        if (!audios || currentIndex >= audios.length - 1) return;
         const nextAudio = audios[currentIndex + 1];
         if (nextAudio) {
             const nextComp = itemComponents[nextAudio.id];
             if (nextComp) {
                 nextComp.playAudio();
+            }
+        }
+    }
+
+    function handlePrevTrack(currentIndex: number) {
+        if (!audios || currentIndex <= 0) return;
+        const prevAudio = audios[currentIndex - 1];
+        if (prevAudio) {
+            const prevComp = itemComponents[prevAudio.id];
+            if (prevComp) {
+                prevComp.playAudio();
             }
         }
     }
@@ -117,20 +123,6 @@
     }
 </script>
 
-<div class="audio-list-controls">
-    <label class="autoplay-toggle" for="autoplay-switch">
-        <input
-            type="checkbox"
-            id="autoplay-switch"
-            role="switch"
-            aria-checked={autoplayEnabled}
-            checked={autoplayEnabled}
-            on:change={toggleAutoplay}
-        />
-        <span>Autoplay Next Track</span>
-    </label>
-</div>
-
 <section class="audio-list">
     {#each audios as audio, index (audio.id)}
         <AudioItem
@@ -138,6 +130,8 @@
             {audio}
             {currentUser}
             onEnded={() => handleTrackEnded(index)}
+            onNext={() => handleNextTrack(index)}
+            onPrev={() => handlePrevTrack(index)}
         />
     {/each}
 </section>

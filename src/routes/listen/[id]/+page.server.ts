@@ -68,8 +68,8 @@ export const load: PageServerLoad = async (event) => {
 
     const sortedComments = comments.filter((comment) => {
         if (event.locals.user?.isAdmin) return true;
-        if (comment.user.isTrusted) return true;
-        if (comment.user.id === event.locals.user?.id) return true;
+        if (comment.user?.isTrusted) return true;
+        if (comment.user?.id === event.locals.user?.id) return true;
         return false;
     });
 
@@ -86,21 +86,21 @@ export const load: PageServerLoad = async (event) => {
 
     if (event.locals.user) {
         try {
-            const results = await Promise.all([
-                AudioFollow.isFollowing(event.locals.user.id, audio.id),
-                AudioFavorite.getFavoriteCount(audio.id),
-                AudioFavorite.isFavorited(event.locals.user.id, audio.id),
+            const [followRes, favCountRes, favRes] = await Promise.all([
+                AudioFollow.findOne({ where: { userId: event.locals.user.id, audioId: audio.id } }),
+                AudioFavorite.count({ where: { audioId: audio.id } }),
+                AudioFavorite.findOne({ where: { userId: event.locals.user.id, audioId: audio.id } }),
             ]);
 
-            isFollowing = results[0];
-            favoriteCount = results[1];
-            isFavorited = results[2];
+            isFollowing = !!followRes;
+            favoriteCount = favCountRes;
+            isFavorited = !!favRes;
         } catch (err) {
             console.error("Error fetching audio interaction data:", err);
         }
     } else {
         try {
-            favoriteCount = await AudioFavorite.getFavoriteCount(audio.id);
+            favoriteCount = await AudioFavorite.count({ where: { audioId: audio.id } });
         } catch (err) {
             console.error("Error fetching favorite count:", err);
         }

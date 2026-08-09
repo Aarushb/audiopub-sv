@@ -24,6 +24,7 @@ export interface ClientsideUser {
     isBanned: boolean;
     isVerified: boolean;
     isTrusted: boolean;
+    isAdmin?: boolean;
 }
 
 export interface ClientsidePlaylist {
@@ -83,6 +84,7 @@ export interface ClientsideAudio {
     user?: ClientsideUser;
     comments?: ClientsideComment[];
     playlists?: { id: string; name: string }[];
+    archivedStream?: ClientsideStream | null;
 }
 
 export interface ClientsideComment {

@@ -93,7 +93,7 @@ export const actions: Actions = {
         });
 
         await fs.mkdir(path.dirname(audio.path), { recursive: true });
-        await fs.writeFile(audio.path, Buffer.from(await file.arrayBuffer()));
+        await fs.writeFile(audio.path, new Uint8Array(await file.arrayBuffer()));
         transcode(audio.path).catch(async (err) => {
             console.warn("Transcoding failed or ffmpeg not present. Falling back to original file copy.");
             try {

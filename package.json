@@ -47,6 +47,7 @@
 		"mariadb": "^3.4.5",
 		"mime-types": "^3.0.1",
 		"react-onesignal": "^3.5.1",
+		"reflect-metadata": "^0.2.2",
 		"sequelize": "^6.37.7",
 		"sequelize-typescript": "^2.1.6",
 		"uuid": "^13.0.0"

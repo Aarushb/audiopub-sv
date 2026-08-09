@@ -10,7 +10,8 @@
     import { browser } from "$app/environment";
     import OneSignal from "react-onesignal";
     import type { LayoutData } from "./$types";
-    import { PUBLIC_ONE_SIGNAL_APP_ID } from "$env/static/public";
+    import * as envPublic from "$env/static/public";
+    const PUBLIC_ONE_SIGNAL_APP_ID = (envPublic as any).PUBLIC_ONE_SIGNAL_APP_ID;
 
     export let data: LayoutData;
 

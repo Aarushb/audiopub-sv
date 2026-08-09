@@ -135,7 +135,7 @@
                         ☆ Favorite
                     </button>
                 </form>
-            {/if;
+            {/if}
         {/if}
         <button type="button" class="share-btn" on:click={shareAudio}>
             Share
@@ -180,16 +180,14 @@
             <h2>Stream Chat Archive</h2>
             <StreamChatList
                 streamId={data.audio.archivedStream.id}
-                initialChats={data.audio.archivedStream.chats}
-                archiveMode={true}
-                audioElement={audioElement}
+                chats={data.audio.archivedStream.chats || []}
             />
         </div>
     {:else}
         <CommentList
             comments={data.comments}
             isAdmin={data.isAdmin}
-            user={data.user}
+            user={data.user || undefined}
         />
 
         {#if data.user && !data.user.isBanned}

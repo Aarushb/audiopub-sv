@@ -41,7 +41,7 @@ export const GET: RequestHandler = async (event) => {
   const path = `./audio/${id}`;
   try {
     const file = await fs.readFile(path);
-    return new Response(file, {
+    return new Response(new Uint8Array(file), {
       headers: {
         "Content-Type": "application/octet-stream",
         "Content-Length": file.byteLength.toString(),
