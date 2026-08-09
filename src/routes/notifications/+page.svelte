@@ -20,11 +20,57 @@
 <script lang="ts">
     import NotificationItem from "$lib/components/notification.svelte";
     import { enhance } from "$app/forms";
+    import { browser } from "$app/environment";
+    import OneSignal from "react-onesignal";
     import type { PageData } from "./$types";
+    import { onMount } from "svelte";
     export let data: PageData;
+
+    let pushSupported = false;
+    let permissionGranted = false;
+
+    async function togglePush() {
+        if (!browser) return;
+        if (!pushSupported) return;
+        const optedIn = OneSignal.User.PushSubscription.optedIn as boolean;
+        if (optedIn) {
+            await OneSignal.User.PushSubscription.optOut();
+        } else {
+            await OneSignal.User.PushSubscription.optIn();
+        }
+    }
+
+    async function requestPermission() {
+        if (!browser || !pushSupported) return;
+        await OneSignal.Notifications.requestPermission();
+        permissionGranted = OneSignal.Notifications.permission as boolean;
+    }
+
+    onMount(() => {
+        pushSupported = OneSignal.Notifications.isPushSupported();
+        permissionGranted = OneSignal.Notifications.permission as boolean;
+    });
 </script>
 
 <h1>Notifications</h1>
+
+{#if browser && data.user && permissionGranted}
+    <div class="push-toggle">
+        <label>
+            <input
+                type="checkbox"
+                checked={OneSignal.User.PushSubscription.optedIn as boolean}
+                on:change={togglePush}
+            />
+            Push notifications
+        </label>
+    </div>
+{:else if browser && data.user && pushSupported}
+    <div class="push-alert" role="alert">
+        <p>Would you like to receive push notifications on this device?</p>
+        <button on:click={requestPermission}>Enable Push Notifications</button>
+    </div>
+{/if}
 
 {#if data.notifications.length === 0}
     <p>No notifications.</p>
@@ -89,5 +135,51 @@
     .delete-btn:hover {
         background: #f0f0f0;
         border-color: #aaa;
+    }
+
+    .push-toggle {
+        margin-bottom: 1rem;
+    }
+
+    .push-toggle label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+    }
+
+    .push-toggle input {
+        width: auto;
+    }
+
+    .push-alert {
+        background: #fff3cd;
+        border: 1px solid #ffc107;
+        border-radius: 4px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .push-alert p {
+        margin: 0;
+        flex: 1;
+    }
+
+    .push-alert button {
+        flex-shrink: 0;
+        padding: 0.5rem 1rem;
+        background: #007bff;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .push-alert button:hover {
+        background: #0056b3;
     }
 </style>

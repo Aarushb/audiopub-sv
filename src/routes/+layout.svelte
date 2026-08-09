@@ -2,25 +2,15 @@
   This file is part of the audiopub project.
   
   Copyright (C) 2025 the-byte-bender
-  
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-  
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-  GNU Affero General Public License for more details.
-  
-  You should have received a copy of the GNU Affero General Public License
-  along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
     import { enhance } from "$app/forms";
     import title from "$lib/title";
     import { onDestroy, onMount } from "svelte";
+    import { browser } from "$app/environment";
+    import OneSignal from "react-onesignal";
     import type { LayoutData } from "./$types";
+    import { PUBLIC_ONE_SIGNAL_APP_ID } from "$env/static/public";
 
     export let data: LayoutData;
 
@@ -32,12 +22,13 @@
     let inFlight = false;
     let lastFetchTs = 0;
     const MIN_IMMEDIATE_INTERVAL = 20000;
+    let onesignalReady = false;
 
     async function refreshUnread() {
         if (!data.user) return;
         if (document.visibilityState === "hidden") return;
         if (inFlight) return;
-        
+
         try {
             inFlight = true;
             const ctrl = new AbortController();
@@ -50,13 +41,13 @@
             if (!res.ok) throw new Error(String(res.status));
             const body = await res.json();
             unreadCount = Number(body?.unread ?? 0) || 0;
-            
+
             // Reset backoff on success
             backoffMs = 60000;
         } catch (e) {
             backoffMs = Math.min(
                 Math.max(backoffMs * 2, minBackoff),
-                maxBackoff
+                maxBackoff,
             );
         } finally {
             lastFetchTs = Date.now();
@@ -72,41 +63,72 @@
         }, backoffMs);
     }
 
-    function kickImmediate() {
+    function triggerImmediateRefresh() {
         const now = Date.now();
-        if (inFlight) return;
         if (now - lastFetchTs < MIN_IMMEDIATE_INTERVAL) return;
         refreshUnread();
     }
 
     onMount(() => {
-        refreshUnread().finally(scheduleNext);
-        const onVis = () =>
-            document.visibilityState === "visible" && kickImmediate();
-        const onFocus = () => kickImmediate();
-        document.addEventListener("visibilitychange", onVis);
-        window.addEventListener("focus", onFocus);
+        refreshUnread();
+        scheduleNext();
+
+        const handleVisibility = () => {
+            if (document.visibilityState === "visible") {
+                triggerImmediateRefresh();
+            }
+        };
+
+        const handleFocus = () => {
+            triggerImmediateRefresh();
+        };
+
+        window.addEventListener("visibilitychange", handleVisibility);
+        window.addEventListener("focus", handleFocus);
+
+        if (browser && PUBLIC_ONE_SIGNAL_APP_ID) {
+            try {
+                OneSignal.init({
+                    appId: PUBLIC_ONE_SIGNAL_APP_ID,
+                    allowLocalhostAsSecureOrigin: true,
+                }).then(() => {
+                    onesignalReady = true;
+                    if (data.user) {
+                        OneSignal.login(data.user.id);
+                    }
+                });
+            } catch (e) {
+                console.error("Failed to initialize OneSignal:", e);
+            }
+        }
+
         return () => {
-            document.removeEventListener("visibilitychange", onVis);
-            window.removeEventListener("focus", onFocus);
+            if (timer) clearTimeout(timer);
+            window.removeEventListener("visibilitychange", handleVisibility);
+            window.removeEventListener("focus", handleFocus);
         };
     });
 
-    onDestroy(() => {
-        if (timer) clearTimeout(timer);
-    });
+    $: if (browser && onesignalReady) {
+        if (data.user) {
+            OneSignal.login(data.user.id);
+        } else {
+            OneSignal.logout();
+        }
+    }
 </script>
 
-<svelte head>
+<svelte:head>
     <title
         >{unreadCount > 0 ? `(${unreadCount}) ` : ""}{$title} | audiopub</title
     >
-</svelte>
+</svelte:head>
 
 <header>
     <nav>
         <a href="/">Home</a>
         <a href="/quickfeed">Quickfeed</a>
+        <a href="/subscriptions">Subscriptions</a>
         {#if data.user}
             {#if !data.user.isVerified}
                 <p>
@@ -135,6 +157,9 @@
                     </div>
                 </details>
                 <a href="/profile">Profile</a>
+                {#if data.user.isAdmin}
+                    <a href="/admin">Admin Panel</a>
+                {/if}
                 <a href="/logout">Logout</a>
             {/if}
         {:else}
@@ -142,7 +167,7 @@
             <a href="/register">Register</a>
         {/if}
     </nav>
-    <form use:enhance action="/search" method="get">
+    <form action="/search" method="get">
         <input type="text" name="q" placeholder="Search..." />
         <button type="submit">Search</button>
     </form>
@@ -185,11 +210,6 @@
         top: 0;
         z-index: 1000;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    nav {
-        display: flex;
-        align-items: center;
     }
 
     nav a {

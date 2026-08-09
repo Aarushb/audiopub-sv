@@ -18,8 +18,7 @@
  */
 import type { RequestHandler } from "./$types";
 import { json } from "@sveltejs/kit";
-import { Notification, User } from "$lib/server/database";
-import { Op } from "sequelize";
+import { Notification } from "$lib/server/database";
 
 export const GET: RequestHandler = async ({ locals }) => {
     const user = locals.user;
@@ -28,16 +27,7 @@ export const GET: RequestHandler = async ({ locals }) => {
         where: {
             userId: user.id,
             readAt: null,
-            [Op.or]: [{ "$actor.isTrusted$": true }, { actorId: null }],
         },
-        include: [
-            {
-                model: User,
-                as: "actor",
-                required: false,
-                attributes: ["isTrusted"],
-            },
-        ],
     });
     return json({ unread });
 };

@@ -1,6 +1,6 @@
 /*
  * This file is part of the audiopub project.
- * 
+ *
  * Copyright (C) 2024 the-byte-bender
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@ import { redirect } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 
 export const GET: RequestHandler = (event) => {
-  event.cookies.delete("token", { path: "/" });
-  event.locals.user = null;
-  return redirect(303, "/");
+    event.cookies.delete("token", { path: "/" });
+    event.locals.user = null;
+    return redirect(303, "/");
 };

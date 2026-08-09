@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-import { Audio, User, Playlist } from "$lib/server/database";
+import { Audio, User, Playlist, Stream } from "$lib/server/database";
 import AudioFavorite from "$lib/server/database/models/audio_favorite";
 import type { PageServerLoad } from "./$types";
 import { type OrderItem, Sequelize, Op } from "sequelize";
@@ -27,9 +27,10 @@ export const load: PageServerLoad = async (event) => {
     const sortField = event.url.searchParams.get("sort") || "createdAt";
     const sortOrder = event.url.searchParams.get("order") || "DESC";
 
-    const hasFilterParams = event.url.searchParams.has("filter_clips") ||
-                             event.url.searchParams.has("filter_archives") ||
-                             event.url.searchParams.has("filter_playlists");
+    const hasFilterParams =
+        event.url.searchParams.has("filter_clips") ||
+        event.url.searchParams.has("filter_archives") ||
+        event.url.searchParams.has("filter_playlists");
 
     let filterClips = event.url.searchParams.get("filter_clips") !== "false";
     let filterArchives = event.url.searchParams.get("filter_archives") !== "false";
@@ -48,7 +49,13 @@ export const load: PageServerLoad = async (event) => {
         filterPlaylists = true;
     }
 
-    const validSortFields = ["createdAt", "plays", "title", "random", "favoriteCount"];
+    const validSortFields = [
+        "createdAt",
+        "plays",
+        "title",
+        "random",
+        "favoriteCount",
+    ];
     const validSortOrders = ["ASC", "DESC"];
     const validatedSortField = validSortFields.includes(sortField)
         ? sortField
@@ -62,9 +69,16 @@ export const load: PageServerLoad = async (event) => {
 
     let order: OrderItem[] | undefined;
     if (validatedSortField === "random") {
-        order = [Sequelize.fn('RAND')];
+        order = [Sequelize.fn("RAND")];
     } else if (validatedSortField === "favoriteCount") {
-        order = [[Sequelize.literal('(SELECT COUNT(*) FROM AudioFavorites WHERE audioId = Audio.id)'), validatedSortOrder]];
+        order = [
+            [
+                Sequelize.literal(
+                    "(SELECT COUNT(*) FROM AudioFavorites WHERE audioId = Audio.id)",
+                ),
+                validatedSortOrder,
+            ],
+        ];
     } else {
         order = [[validatedSortField, validatedSortOrder]];
     }
@@ -118,35 +132,49 @@ export const load: PageServerLoad = async (event) => {
                 AudioFavorite.findAll({
                     where: { audioId: audioIds },
                     attributes: [
-                        'audioId',
-                        [Sequelize.fn('COUNT', Sequelize.col('id')), 'count']
+                        "audioId",
+                        [Sequelize.fn("COUNT", Sequelize.col("id")), "count"],
                     ],
-                    group: ['audioId']
+                    group: ["audioId"],
                 }),
-                currentUser ? AudioFavorite.findAll({
-                    where: { 
-                        userId: currentUser.id,
-                        audioId: audioIds 
-                    },
-                    attributes: ['audioId']
-                }) : Promise.resolve([])
+                currentUser
+                    ? AudioFavorite.findAll({
+                          where: {
+                              userId: currentUser.id,
+                              audioId: audioIds,
+                          },
+                          attributes: ["audioId"],
+                      })
+                    : Promise.resolve([]),
             ]);
 
             favoriteCounts = new Map(
-                favoriteCountsData.map(item => [
-                    item.audioId, 
-                    parseInt((item as any).get('count')) || 0
-                ])
+                favoriteCountsData.map((item) => [
+                    item.audioId,
+                    parseInt((item as any).get("count")) || 0,
+                ]),
             );
-            userFavorites = new Set(userFavoritesData.map(item => item.audioId));
+            userFavorites = new Set(
+                userFavoritesData.map((item) => item.audioId),
+            );
         } catch (err) {
-            console.error('Error fetching favorite data:', err);
+            console.error("Error fetching favorite data:", err);
         }
     }
 
     const totalCount = audios.count + playlists.count;
 
     return {
+        streams:
+            page === 1
+                ? (
+                      await Stream.findAll({
+                          where: { state: "active" },
+                          order: [["createdAt", "DESC"]],
+                          include: User,
+                      })
+                  ).map((s) => s.toClientside(true))
+                : [],
         audios: audios.rows.map((audio) => {
             const favoriteCount = favoriteCounts.get(audio.id) || 0;
             const isFavorited = userFavorites.has(audio.id);

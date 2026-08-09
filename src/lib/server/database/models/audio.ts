@@ -32,6 +32,7 @@ import {
     BelongsTo,
     HasMany,
     BelongsToMany,
+    HasOne,
     Sequelize,
 } from "sequelize-typescript";
 import Mime from "mime-types";
@@ -41,6 +42,7 @@ import PlaysTracker from "./plays_tracker";
 import AudioFavorite from "./audio_favorite";
 import Playlist from "./playlist";
 import PlaylistAudio from "./playlist_audio";
+import Stream from "./stream";
 import type { ClientsideAudio } from "$lib/types";
 
 export interface AudioInfo {
@@ -100,8 +102,15 @@ export default class Audio extends Model {
     @Column(DataType.UUID)
     declare userId: string;
 
+    @ForeignKey(() => Stream)
+    @Column(DataType.UUID)
+    declare archivedStreamId: string | null;
+
     @BelongsTo(() => User)
     declare user?: User;
+
+    @BelongsTo(() => Stream)
+    declare archivedStream?: Stream | null;
 
     @HasMany(() => Comment)
     declare comments?: Comment[];
@@ -164,7 +173,11 @@ export default class Audio extends Model {
         return true;
     }
 
-    toClientside(includeUser: boolean = true, favoriteCount?: number, isFavorited?: boolean): ClientsideAudio {
+    toClientside(
+        includeUser: boolean = true,
+        favoriteCount?: number,
+        isFavorited?: boolean,
+    ): ClientsideAudio {
         return {
             id: this.id,
             title: this.title,
@@ -187,9 +200,9 @@ export default class Audio extends Model {
     static async search(query: string, page: number): Promise<Audio[]> {
         return Audio.findAll({
             where: Sequelize.literal(
-                `MATCH(title, description) AGAINST(:query IN NATURAL LANGUAGE MODE)`
+                `MATCH(title, description) AGAINST(:query IN NATURAL LANGUAGE MODE)`,
             ),
-            replacements: { query},
+            replacements: { query },
             limit: 30,
             offset: (page - 1) * 30,
             include: User,

@@ -20,8 +20,9 @@ import fs from "fs/promises";
 import path from "path";
 import { error, fail, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
-import { Audio, Playlist, PlaylistAudio } from "$lib/server/database";
+import { Audio, Playlist, PlaylistAudio, Notification, Subscription } from "$lib/server/database";
 import transcode from "$lib/server/transcode";
+import { NotificationTargetType, NotificationType } from "$lib/types";
 
 export const load: PageServerLoad = async (event) => {
     const user = event.locals.user;
@@ -61,27 +62,21 @@ export const actions: Actions = {
             if (userAudioCount >= 1) {
                 return error(
                     403,
-                    "Please wait for your account to be reviewed."
+                    "Please wait for your account to be reviewed.",
                 );
             }
         }
-        const form = await event.request.formData();
-        const file = form.get("file") as File;
-        const title = form.get("title") as string;
-        const description = form.get("description") as string;
-        const isLiveArchive = form.get("isLiveArchive") === "true" || event.url.searchParams.get("type") === "live";
-        const playlistIds = form.getAll("playlistIds") as string[];
+        const data = await event.request.formData();
+        const file = data.get("file") as File;
+        const title = data.get("title") as string;
+        const description = (data.get("description") as string) || "";
+        const isLiveArchive = data.get("isLiveArchive") === "true";
+        const playlistIds = data.getAll("playlistIds") as string[];
 
-        if (!file) {
+        if (!file || !title) {
             return fail(400, { title, description });
         }
-        if (!title) {
-            return fail(400, { title, description });
-        }
-        if (title.length < 3 || title.length > 120) {
-            return fail(400, { title, description });
-        }
-        if (description && description.length > 5000) {
+        if (title.length > 500) {
             return fail(400, { title, description });
         }
         if (file.size > 1024 * 1024 * 500) {
@@ -120,6 +115,17 @@ export const actions: Actions = {
                     });
                 }
             }
+        }
+
+        const subscriptions = await Subscription.findAll({ where: { subscribedToId: event.locals.user?.id } });
+        for (const subscription of subscriptions) {
+            await Notification.create({
+                userId: subscription.subscriberId,
+                actorId: user.id,
+                type: NotificationType.upload,
+                targetType: NotificationTargetType.audio,
+                targetId: audio.id,
+            });
         }
 
         return redirect(303, `/listen/${audio.id}`);

@@ -1,7 +1,7 @@
 /*
  * This file is part of the audiopub project.
- * 
- * Copyright (C) 2024 the-byte-bender
+ *
+ * Copyright (C) 2026 the-byte-bender
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -16,19 +16,19 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-import { handler } from "../build/handler.js";
-import express from "express";
+import type { RequestHandler } from "./$types";
+import { User } from "$lib/server/database";
 
-const app = express();
+export const GET: RequestHandler = async (event) => {
+    const user = event.locals.user;
+    if (!user) {
+        return new Response(null, { status: 401 });
+    }
 
-// add a route that lives separately from the SvelteKit app
-app.get("/healthcheck", (req, res) => {
-  res.end("ok");
-});
+    if (!user.notificationKey) {
+        user.notificationKey = crypto.randomUUID();
+        await user.save();
+    }
 
-// let SvelteKit handle everything else, including serving prerendered pages and static assets
-app.use(handler);
-
-app.listen(3000, () => {
-  console.log("listening on port 3000");
-});
+    return Response.json({ notificationKey: user.notificationKey });
+};

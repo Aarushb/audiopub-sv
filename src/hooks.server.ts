@@ -24,11 +24,33 @@ if (!buffer.SlowBuffer) {
 import type { Handle } from "@sveltejs/kit";
 import jwt from "jsonwebtoken";
 import { User } from "$lib/server/database";
+import { streamingService } from "$lib/server/streaming";
 import dotenv from "dotenv";
 dotenv.config();
 
+if (
+    !process.env.ICECAST_HOST ||
+    !process.env.ICECAST_ADMIN_USER ||
+    !process.env.ICECAST_ADMIN_PASSWORD
+) {
+    throw new Error(
+        "One or more required environment variables for ICECAST are not defined",
+    );
+}
+
+streamingService.start({
+    host: process.env.ICECAST_HOST,
+    adminUser: process.env.ICECAST_ADMIN_USER,
+    adminPassword: process.env.ICECAST_ADMIN_PASSWORD,
+});
+
+process.on("sveltekit:shutdown", () => {
+    streamingService.stopGracefulShutdown();
+});
+
 export const handle: Handle = async ({ event, resolve }) => {
-    const host = event.request.headers.get("x-forwarded-host") || event.url.hostname;
+    const host =
+        event.request.headers.get("x-forwarded-host") || event.url.hostname;
 
     if (host.split(".")[0] === "upload") {
         // Prepend "/upload" to the pathname if it's not already there
@@ -36,7 +58,7 @@ export const handle: Handle = async ({ event, resolve }) => {
             event.url.pathname = `/upload${event.url.pathname}`;
         }
     }
-    
+
     event.locals.user = null;
     const fromAiHeader = event.request.headers.get("x-from-ai");
     event.locals.isFromAi = fromAiHeader ? true : false;
@@ -68,7 +90,6 @@ export const handle: Handle = async ({ event, resolve }) => {
         }
     } catch (e) {
         return resolve(event);
-        // You may want to log the error or handle it differently
     }
 
     return resolve(event);

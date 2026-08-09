@@ -33,12 +33,13 @@ import {
 import User from "./user";
 import Audio from "./audio";
 import Comment from "./comment";
-import type { ClientsideAudio, ClientsideComment } from "$lib/types";
+import type { ClientsideAudio, ClientsideComment, ClientsideStream } from "$lib/types";
 import {
     NotificationType,
     NotificationTargetType,
     type ClientsideResolvedNotification,
 } from "$lib/types";
+import Stream from "./stream";
 
 @Table
 export default class Notification extends Model {
@@ -115,10 +116,16 @@ export default class Notification extends Model {
         );
 
         const audioIds = new Set<string>();
+        const streamIds = new Set<string>();
         const commentIds = new Set<string>();
         for (const n of notifications) {
             if (n.targetType === NotificationTargetType.audio && n.targetId) {
                 audioIds.add(n.targetId);
+            } else if (
+                n.targetType == NotificationTargetType.stream &&
+                n.targetId
+            ) {
+                streamIds.add(n.targetId);
             } else if (
                 n.targetType === NotificationTargetType.comment &&
                 n.targetId
@@ -127,14 +134,17 @@ export default class Notification extends Model {
             }
         }
 
-        const [actors, audios, comments] = await Promise.all([
+        const [actors, audios, streams, comments] = await Promise.all([
             actorIds.length
                 ? User.findAll({ where: { id: actorIds as any } })
                 : Promise.resolve([]),
             audioIds.size
                 ? Audio.findAll({ where: { id: Array.from(audioIds) as any } })
                 : Promise.resolve([]),
-            commentIds.size
+            streamIds.size
+                ? Stream.findAll({ where: { id: Array.from(streamIds) as any } })
+                : Promise.resolve([]),
+                commentIds.size
                 ? Comment.findAll({
                       where: { id: Array.from(commentIds) as any },
                       include: [Audio, User],
@@ -146,6 +156,8 @@ export default class Notification extends Model {
         for (const a of actors) actorMap.set(a.id, a);
         const audioMap = new Map<string, Audio>();
         for (const a of audios) audioMap.set(a.id, a);
+        const streamMap = new Map<string, Stream>();
+        for (const s of streams) streamMap.set(s.id, s);        
         const commentMap = new Map<string, Comment>();
         for (const c of comments) commentMap.set(c.id, c);
 
@@ -153,12 +165,16 @@ export default class Notification extends Model {
         const toDelete: Notification[] = [];
 
         for (const n of notifications) {
-            let target: ClientsideAudio | ClientsideComment | undefined =
+            let target: ClientsideAudio | ClientsideStream | ClientsideComment | undefined =
                 undefined;
             if (n.targetType === NotificationTargetType.audio) {
                 const a = n.targetId ? audioMap.get(n.targetId) : undefined;
                 if (!a && n.targetId) toDelete.push(n);
                 if (a) target = a.toClientside();
+        } else if (n.targetType === NotificationTargetType.stream) {
+                const s = n.targetId ? streamMap.get(n.targetId) : undefined;
+                if (!s && n.targetId) toDelete.push(n);
+                if (s) target = s.toClientside();
             } else if (n.targetType === NotificationTargetType.comment) {
                 const c = n.targetId ? commentMap.get(n.targetId) : undefined;
                 if (!c && n.targetId) toDelete.push(n);
@@ -166,10 +182,6 @@ export default class Notification extends Model {
             }
 
             const actor = n.actorId ? actorMap.get(n.actorId) : undefined;
-
-            if (actor && !actor.isTrusted) {
-                continue;
-            }
 
             resolved.push({
                 id: n.id,

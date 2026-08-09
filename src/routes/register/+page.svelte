@@ -43,6 +43,7 @@
             id="username"
             name="username"
             required
+            autofocus
             minlength="3"
             maxlength="24"
             class="form-control"
@@ -69,6 +70,39 @@
             maxlength="64"
             class="form-control"
         />
+    </div>
+    <div class="form-group checkbox-group">
+        <label class="checkbox-label" for="agreeReview">
+            <input
+                type="checkbox"
+                id="agreeReview"
+                name="agreeReview"
+                required
+            />
+            I agree to the account approval process
+        </label>
+        <p class="agreement-text">
+            My account must be approved by a moderator before I can fully
+            participate on the platform. I understand that:
+        </p>
+        <ul class="agreement-list">
+            <li>
+                The first audio I upload will need to pass review before it is
+                shown publicly on the site.
+            </li>
+            <li>
+                I will not be able to upload additional audio until my account
+                has been approved.
+            </li>
+            <li>
+                I will not be able to start a live stream until my account has
+                been approved.
+            </li>
+            <li>
+                Commenting and live chat are available to me immediately, even
+                before my account is approved.
+            </li>
+        </ul>
     </div>
     <button type="submit" class="btn">Register</button>
 </form>
@@ -142,5 +176,38 @@
 
     .btn:hover {
         background-color: #0056b3;
+    }
+
+    .checkbox-group {
+        align-items: flex-start;
+    }
+
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: bold;
+        color: #555;
+        cursor: pointer;
+        margin-bottom: 0;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+        width: auto;
+        flex-shrink: 0;
+    }
+
+    .agreement-text {
+        margin: 0.5rem 0 0;
+        color: #666;
+        font-size: 0.9rem;
+    }
+
+    .agreement-list {
+        margin: 0.25rem 0 0;
+        padding-left: 1.25rem;
+        color: #555;
+        font-size: 0.9rem;
+        text-align: left;
     }
 </style>

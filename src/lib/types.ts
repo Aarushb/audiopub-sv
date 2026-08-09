@@ -20,6 +20,7 @@ export interface ClientsideUser {
     id: string;
     name: string;
     displayName: string;
+    bio: string;
     isBanned: boolean;
     isVerified: boolean;
     isTrusted: boolean;
@@ -32,6 +33,37 @@ export interface ClientsidePlaylist {
     user?: ClientsideUser;
     audios?: ClientsideAudio[];
     trackCount?: number;
+}
+
+export interface ClientsideStream {
+    id: string;
+    title: string;
+    description: string;
+    state: StreamState;
+    peekListeners: number;
+    activeListeners: number;
+    createdAt: number;
+    user?: ClientsideUser;
+    chats?: ClientsideStreamChat[];
+    isStream: true;
+}
+
+export interface ClientsideStreamChat {
+    id: string;
+    content: string;
+    createdAt: number;
+    user: ClientsideUser;
+    stream?: ClientsideStream;
+}
+
+export interface ClientsideStreamMute {
+    id: string;
+    userId: string;
+    userName: string;
+    displayName: string;
+    expiresAt: number | null;
+    reason: string | null;
+    createdAt: number;
 }
 
 export interface ClientsideAudio {
@@ -60,6 +92,7 @@ export interface ClientsideComment {
     updatedAt: number;
     user: ClientsideUser;
     audio?: ClientsideAudio;
+    replies?: ClientsideComment[];
 }
 
 export enum NotificationType {
@@ -71,7 +104,20 @@ export enum NotificationType {
 
 export enum NotificationTargetType {
     audio = "audio",
+    stream = "stream",
     comment = "comment",
+}
+
+export enum StreamState {
+    pending = "pending",
+    active = "active",
+    disconnected = "disconnected",
+    finished = "finished",
+}
+
+export enum StreamFormat {
+    aac = "aac",
+    mp3 = "mp3",
 }
 
 export interface ClientsideResolvedNotification {
@@ -79,7 +125,7 @@ export interface ClientsideResolvedNotification {
     userId: string | null;
     type: NotificationType;
     targetType: NotificationTargetType;
-    target?: ClientsideAudio | ClientsideComment|null;
+    target?: ClientsideAudio | ClientsideStream | ClientsideComment | null;
     metadata?: any;
     actor?: ClientsideUser;
     readAt?: number;

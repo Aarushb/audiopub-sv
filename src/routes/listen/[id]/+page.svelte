@@ -2,19 +2,6 @@
   This file is part of the audiopub project.
   
   Copyright (C) 2025 the-byte-bender
-  
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-  
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-  GNU Affero General Public License for more details.
-  
-  You should have received a copy of the GNU Affero General Public License
-  along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
     export let data;
@@ -22,10 +9,15 @@
     import { enhance } from "$app/forms";
     import { onMount } from "svelte";
     import CommentList from "$lib/components/comment_list.svelte";
+    import StreamChatList from "$lib/components/stream_chat_list.svelte";
     import title from "$lib/title";
     import SafeMarkdown from "$lib/components/safe_markdown.svelte";
+    import type { ClientsideComment } from "$lib/types.js";
+    import SubscribeButton from "$lib/components/subscribe_button.svelte";
+    import AudioPlayer from "$lib/components/audio_player.svelte";
 
     let autoplayEnabled = true;
+    let audioElement: HTMLAudioElement | undefined = undefined;
 
     onMount(() => {
         if (data.audio) {
@@ -38,18 +30,13 @@
 
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get("autoplay") === "true") {
-            const player = document.getElementById("player") as HTMLAudioElement | null;
-            if (player) {
-                player.play().catch(() => {});
-            }
+            setTimeout(() => {
+                if (audioElement) {
+                    audioElement.play().catch(() => {});
+                }
+            }, 100);
         }
     });
-
-    function toggleAutoplay(e: Event) {
-        const target = e.target as HTMLInputElement;
-        autoplayEnabled = target.checked;
-        localStorage.setItem("audiopub_autoplay", String(autoplayEnabled));
-    }
 
     const handlePlay = () => {
         if (data.audio) {
@@ -63,36 +50,63 @@
         }
     };
 
+    const handleNext = () => {
+        if (data.nextAudioId) {
+            window.location.href = `/listen/${data.nextAudioId}`;
+        }
+    };
+
+    const handlePrev = () => {
+        window.history.back();
+    };
+
     $: favoritesString = (() => {
         const count = data.audio?.favoriteCount || 0;
         if (count === 0) return "No favorites";
         if (count === 1) return "1 favorite";
         return `${count} favorites`;
     })();
+
+    function shareAudio() {
+        if (!data.audio) return;
+        const url = window.location.href;
+        if (navigator.share) {
+            navigator
+                .share({
+                    title: data.audio.title,
+                    url: url,
+                })
+                .catch((error) => console.log("Error sharing", error));
+        } else {
+            navigator.clipboard
+                .writeText(url)
+                .then(() => {
+                    alert("Link copied to clipboard");
+                })
+                .catch((err) => {
+                    console.error("Could not copy text: ", err);
+                });
+        }
+    }
 </script>
 
 {#if data.audio}
 <h1>{data.audio.title}</h1>
 
 <div class="audio-player">
-    <div class="autoplay-container">
-        <label class="autoplay-label" for="autoplay-toggle">
-            <input
-                type="checkbox"
-                id="autoplay-toggle"
-                role="switch"
-                aria-checked={autoplayEnabled}
-                checked={autoplayEnabled}
-                on:change={toggleAutoplay}
-            />
-            Autoplay Next Track
-        </label>
-    </div>
-    <audio controls id="player" on:play={handlePlay} on:ended={handleEnded}>
-        <source src="/{data.audio.path}" type={data.mimeType} />
-        <source src="/{data.audio.transcodedPath}" type="audio/aac" />
-        <p>Your browser doesn't support the audio element.</p>
-    </audio>
+    <AudioPlayer
+        autofocus
+        bind:audioElement
+        on:play={handlePlay}
+        on:ended={handleEnded}
+        on:next={handleNext}
+        on:prev={handlePrev}
+        sources={[
+            { src: `/${data.audio.path}`, type: data.mimeType },
+            { src: `/${data.audio.transcodedPath}`, type: "audio/aac" },
+        ]}
+    />
+
     <a
         href="/{data.audio.path}"
         download={data.audio.title +
@@ -100,7 +114,7 @@
                 ? data.audio.extension
                 : "." + data.audio.extension)}
     >
-        Download
+        Download Audio File
     </a>
 </div>
 
@@ -108,53 +122,40 @@
     <div class="audio-stats">
         <span>{data.audio.playsString}</span>
         <span>{favoritesString}</span>
-{#if data.user}
+        {#if data.user}
             {#if data.audio.isFavorited}
                 <form use:enhance action="?/unfavorite" method="POST">
-                    <button type="submit" class="favorite-button favorited">
-                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                        </svg>
-                        Remove from favorites
+                    <button type="submit" class="favorite-btn favorited">
+                        ★ Favorited
                     </button>
                 </form>
             {:else}
                 <form use:enhance action="?/favorite" method="POST">
-                    <button type="submit" class="favorite-button">
-                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                        </svg>
-                        Add to favorites
+                    <button type="submit" class="favorite-btn">
+                        ☆ Favorite
                     </button>
                 </form>
-            {/if}
+            {/if;
         {/if}
+        <button type="button" class="share-btn" on:click={shareAudio}>
+            Share
+        </button>
     </div>
     {#if data.audio.user}
         <p>
-            Uploaded by: <a href="/user/{data.audio.user.id}"
-                >{data.audio.user.name}</a
+            Uploaded by: <a href="/user/@{encodeURIComponent(data.audio.user.name)}"
+                >{data.audio.user.displayName}</a
             >
+            {#if data.user && data.audio.user.id !== data.user.id}
+                <SubscribeButton
+                    targetUserId={data.audio.user.id}
+                    isSubscribed={data.isSubscribed}
+                />
+            {/if}
         </p>
     {/if}
     <p>Upload date: {new Date(data.audio.createdAt).toLocaleDateString()}</p>
-    {#if data.user}
-        {#if data.audio.user && data.audio.user.id !== data.user.id}
-            {#if data.isFollowing}
-                <form use:enhance action="?/unfollow" method="POST">
-                    <button type="submit"
-                        >Unfollow notifications from this audio</button
-                    >
-                </form>
-            {:else}
-                <form use:enhance action="?/follow" method="POST">
-                    <button type="submit"
-                        >Follow notifications from this audio</button
-                    >
-                </form>
-            {/if}
-        {/if}
-    {/if}
+
     {#if data.audio.description}
         <h2>Description:</h2>
         <SafeMarkdown source={data.audio.description} />
@@ -162,13 +163,7 @@
 
     {#if data.user && (data.isAdmin || data.user.id === data.audio.user?.id)}
         <form
-            use:enhance={({
-                formElement,
-                formData,
-                action,
-                cancel,
-                submitter,
-            }) => {
+            use:enhance={({ cancel }) => {
                 if (!confirm("Are you sure you want to delete this audio?")) {
                     cancel();
                 }
@@ -180,65 +175,53 @@
         </form>
     {/if}
 
-    <CommentList
-        comments={data.comments}
-        isAdmin={data.isAdmin}
-        user={data.user}
-    />
+    {#if data.audio.archivedStream}
+        <div class="chat-archive">
+            <h2>Stream Chat Archive</h2>
+            <StreamChatList
+                streamId={data.audio.archivedStream.id}
+                initialChats={data.audio.archivedStream.chats}
+                archiveMode={true}
+                audioElement={audioElement}
+            />
+        </div>
+    {:else}
+        <CommentList
+            comments={data.comments}
+            isAdmin={data.isAdmin}
+            user={data.user}
+        />
 
-    {#if data.user && !data.user.isBanned}
-        {#if !data.user.isTrusted}
-            <p role="alert">
-                You're not trusted yet. Your comments will be reviewed before
-                being shown. If you submit a comment, it will not be displayed
-                until it's reviewed.
-            </p>
+        {#if data.user && !data.user.isBanned}
+            {#if !data.user.isTrusted}
+                <p role="alert">
+                    You're not trusted yet. Your comments will be reviewed before
+                    being shown. If you submit a comment, it will not be displayed
+                    until it's reviewed.
+                </p>
+            {/if}
+            <form use:enhance action="?/add_comment" method="POST">
+                <label for="comment">Add a comment:</label>
+                <textarea name="comment" id="comment" required maxlength="4000"
+                ></textarea>
+                <button type="submit">Submit</button>
+            </form>
         {/if}
-        <form use:enhance action="?/add_comment" method="POST">
-            <label for="comment">Add a comment:</label>
-            <textarea name="comment" id="comment" required maxlength="4000"
-            ></textarea>
-            <button type="submit">Submit</button>
-        </form>
     {/if}
 </div>
 {/if}
 
 <style>
-    /* Styling for the main title */
     h1 {
         text-align: center;
         margin-bottom: 1rem;
         color: #333;
     }
 
-    /* Styling for the audio player section */
     .audio-player {
         margin-bottom: 1rem;
     }
 
-    .autoplay-container {
-        display: flex;
-        justify-content: flex-end;
-        margin-bottom: 8px;
-    }
-
-    .autoplay-label {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-weight: bold;
-        color: #444;
-        cursor: pointer;
-    }
-
-    /* Styling for the audio controls */
-    audio {
-        width: 100%;
-        margin-bottom: 0.5rem;
-    }
-
-    /* Styling for the download link */
     .audio-player a {
         display: block;
         text-align: center;
@@ -248,112 +231,42 @@
         font-weight: bold;
     }
 
-    /* Styling for the audio details section */
     .audio-details {
-        border: 1px solid #ccc;
-        border-radius: 8px;
-        padding: 1rem;
-        background-color: #f9f9f9;
+        margin-top: 1rem;
     }
 
-    /* Styling for the audio stats (plays and favorites) */
     .audio-stats {
         display: flex;
         align-items: center;
-        gap: 16px;
-        margin-bottom: 12px;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        font-size: 0.95rem;
+        color: #555;
     }
 
-    .audio-stats span {
-        font-weight: 500;
-        color: #666;
-    }
-
-    /* Favorite button styling */
-    .favorite-button {
-        display: flex;
-        align-items: center;
-        gap: 4px;
+    .favorite-btn,
+    .share-btn {
         background: none;
         border: 1px solid #ccc;
+        padding: 0.3rem 0.6rem;
         border-radius: 4px;
-        padding: 4px 8px;
         cursor: pointer;
-        color: #666;
-        font-size: 14px;
-        transition: all 0.2s ease;
+        font-size: 0.9rem;
     }
 
-    .favorite-button:hover {
-        border-color: #ff6b6b;
-        color: #ff6b6b;
-        background-color: rgba(255, 107, 107, 0.1);
+    .favorite-btn:hover,
+    .share-btn:hover {
+        background-color: #f0f0f0;
     }
 
-    .favorite-button.favorited {
-        color: #ff6b6b;
-        border-color: #ff6b6b;
-        background-color: rgba(255, 107, 107, 0.1);
+    .favorite-btn.favorited {
+        color: #d9534f;
+        border-color: #d9534f;
     }
 
-    .favorite-button .heart-icon {
-        flex-shrink: 0;
-    }
-
-    /* Styling for the uploaded by link */
-    .audio-details a {
-        color: #007bff;
-        text-decoration: none;
-    }
-
-    /* Styling for the description section */
-    .audio-details h2 {
-        margin-top: 1rem;
-        color: #333;
-    }
-
-    /* Styling for the delete and move buttons */
-    .audio-details form {
-        margin-top: 1rem;
-    }
-
-    .audio-details button {
-        margin-right: 0.5rem;
-        padding: 0.5rem 1rem;
-        border: none;
-        border-radius: 4px;
-        background-color: #007bff;
-        color: white;
-        cursor: pointer;
-        transition: background-color 0.3s ease;
-    }
-
-    .audio-details button:hover {
-        background-color: #0056b3;
-    }
-
-    /* Styling for the comment section */
-    .audio-details form textarea {
-        width: 100%;
-        margin-top: 0.5rem;
-        padding: 0.5rem;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        resize: vertical;
-    }
-
-    .audio-details form button[type="submit"] {
-        margin-top: 0.5rem;
-        padding: 0.5rem 1rem;
-        border: none;
-        border-radius: 4px;
-        background-color: #007bff;
-        color: white;
-        cursor: pointer;
-        transition: background-color 0.3s ease;
-    }
-
-    .audio-details form button[type="submit"]:hover {
-        background-color: #0056b3;
+    .chat-archive {
+        margin-top: 2rem;
+        border-top: 2px solid #eee;
+        padding-top: 1rem;
     }
 </style>

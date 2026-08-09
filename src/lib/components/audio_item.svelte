@@ -2,33 +2,23 @@
   This file is part of the audiopub project.
   
   Copyright (C) 2025 the-byte-bender
-  
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-  
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-  GNU Affero General Public License for more details.
-  
-  You should have received a copy of the GNU Affero General Public License
-  along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
     import type { ClientsideAudio, ClientsideUser } from "$lib/types";
     import SafeMarkdown from "./safe_markdown.svelte";
+    import AudioPlayer from "./audio_player.svelte";
 
     export let audio: ClientsideAudio;
     export let currentUser: ClientsideUser | null = null;
     export let onEnded: (() => void) | undefined = undefined;
+    export let onNext: (() => void) | undefined = undefined;
+    export let onPrev: (() => void) | undefined = undefined;
 
-    let audioElement: HTMLAudioElement | null = null;
+    let playerComponent: AudioPlayer | undefined = undefined;
 
     export function playAudio() {
-        if (audioElement) {
-            audioElement.play().catch(() => {});
+        if (playerComponent && playerComponent.audioElement) {
+            playerComponent.audioElement.play().catch(() => {});
         }
     }
 
@@ -54,18 +44,17 @@
     </h3>
 
     <div class="item-player-container">
-        <audio
-            bind:this={audioElement}
-            controls
-            id={`player-${audio.id}`}
+        <AudioPlayer
+            bind:this={playerComponent}
+            sources={[
+                { src: `/${audio.path}`, type: "audio/aac" },
+                { src: `/${audio.transcodedPath}`, type: "audio/aac" }
+            ]}
             on:play={handlePlay}
             on:ended={onEnded}
-            preload="metadata"
-        >
-            <source src={`/${audio.path}`} type="audio/aac" />
-            <source src={`/${audio.transcodedPath}`} type="audio/aac" />
-            Your browser does not support the audio element.
-        </audio>
+            on:next={onNext}
+            on:prev={onPrev}
+        />
     </div>
 
     <p>
@@ -78,7 +67,7 @@
             {#if audio.user} | {/if}
         {/if}
         {#if audio.user}
-            By <a href={`/user/${audio.user.id}`}>{audio.user.displayName}</a>
+            By <a href={`/user/@${encodeURIComponent(audio.user.name)}`}>{audio.user.displayName}</a>
         {/if}
     </p>
     <SafeMarkdown source={audio.description} />
@@ -109,8 +98,12 @@
         margin: 8px 0;
     }
 
-    .item-player-container audio {
-        width: 100%;
-        height: 40px;
+    .playlist-info a {
+        color: #007bff;
+        text-decoration: none;
+    }
+
+    .playlist-info a:hover {
+        text-decoration: underline;
     }
 </style>

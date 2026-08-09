@@ -18,7 +18,7 @@
  */
 
 import type { Actions, PageServerLoad } from "./$types";
-import { Notification, User } from "$lib/server/database";
+import { Notification } from "$lib/server/database";
 import { Op } from "sequelize";
 
 export const load: PageServerLoad = async (event) => {
@@ -29,21 +29,10 @@ export const load: PageServerLoad = async (event) => {
 
     const list = await Notification.findAll({
         where: {
-            [Op.and]: [
-                { [Op.or]: [{ userId: user.id }, { userId: null }] },
-                { [Op.or]: [{ "$actor.isTrusted$": true }, { actorId: null }] },
-            ],
+            [Op.or]: [{ userId: user.id }, { userId: null }],
         },
         order: [["createdAt", "DESC"]],
         limit: 100,
-        include: [
-            {
-                model: User,
-                as: "actor",
-                required: false,
-                attributes: ["isTrusted"],
-            },
-        ],
     });
 
     const resolved = await Notification.resolveMany(list);

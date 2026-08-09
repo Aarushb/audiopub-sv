@@ -4,69 +4,51 @@
   Copyright (C) 2024 the-byte-bender
 -->
 <script lang="ts">
-    import title from "$lib/title";
     import AudioList from "$lib/components/audio_list.svelte";
-    import type { PageData } from "./$types";
+    import StreamCard from "$lib/components/stream_card.svelte";
+    import title from "$lib/title";
+    import { onMount } from "svelte";
 
-    export let data: PageData;
-    title.set("Home");
+    export let data;
 
-    let clipsChecked = data.filters.clips;
-    let archivesChecked = data.filters.archives;
-    let playlistsChecked = data.filters.playlists;
+    onMount(() => {
+        title.set("Home");
+    });
+
+    let clipsChecked = data.filters?.clips ?? true;
+    let archivesChecked = data.filters?.archives ?? true;
+    let playlistsChecked = data.filters?.playlists ?? true;
     let filterStatusMessage = "";
 
-    $: clipsChecked = data.filters.clips;
-    $: archivesChecked = data.filters.archives;
-    $: playlistsChecked = data.filters.playlists;
+    function handleFilterChange(type: "clips" | "archives" | "playlists", event: Event) {
+        const target = event.target as HTMLInputElement;
+        const checked = target.checked;
 
-    function handleFilterChange(changedOption: "clips" | "archives" | "playlists", e: Event) {
-        const target = e.target as HTMLInputElement;
-        let c = clipsChecked;
-        let a = archivesChecked;
-        let p = playlistsChecked;
+        if (type === "clips") clipsChecked = checked;
+        if (type === "archives") archivesChecked = checked;
+        if (type === "playlists") playlistsChecked = checked;
 
-        if (changedOption === "clips") c = target.checked;
-        if (changedOption === "archives") a = target.checked;
-        if (changedOption === "playlists") p = target.checked;
+        if (!clipsChecked && !archivesChecked && !playlistsChecked) {
+            if (type === "clips") clipsChecked = true;
+            if (type === "archives") archivesChecked = true;
+            if (type === "playlists") playlistsChecked = true;
 
-        // Ensure user cannot uncheck all options
-        if (!c && !a && !p) {
-            e.preventDefault();
-            target.checked = true;
-            if (changedOption === "clips") clipsChecked = true;
-            if (changedOption === "archives") archivesChecked = true;
-            if (changedOption === "playlists") playlistsChecked = true;
-            filterStatusMessage = "At least one filter option must remain selected.";
+            filterStatusMessage = "At least one content type filter must remain selected.";
+            setTimeout(() => {
+                filterStatusMessage = "";
+            }, 4000);
         } else {
-            clipsChecked = c;
-            archivesChecked = a;
-            playlistsChecked = p;
             filterStatusMessage = "";
         }
     }
 
     $: sortDescription = (() => {
-        let fieldDesc = "";
-        switch (data.sortField) {
-            case "createdAt":
-                fieldDesc = "date";
-                break;
-            case "plays":
-                fieldDesc = "play count";
-                break;
-            case "favoriteCount":
-                fieldDesc = "favorite count";
-                break;
-            case "title":
-                fieldDesc = "title";
-                break;
-            case "random":
-                fieldDesc = "random";
-                break;
-            default:
-                fieldDesc = "date";
-        }
+        let fieldDesc = "date";
+        if (data.sortField === "plays") fieldDesc = "play count";
+        if (data.sortField === "favoriteCount") fieldDesc = "favorite count";
+        if (data.sortField === "title") fieldDesc = "title";
+        if (data.sortField === "random") return "random order";
+
         const orderDesc =
             data.sortField === "random"
                 ? ""
@@ -80,6 +62,13 @@
 </script>
 
 <h1>Welcome to Audiopub</h1>
+
+{#if data.streams && data.streams.length > 0}
+    <h2 id="streams-heading">Currently live</h2>
+    {#each data.streams as stream (stream.id)}
+        <StreamCard {stream} />
+    {/each}
+{/if}
 
 <details class="filter-section" open>
     <summary class="filter-summary">
@@ -196,41 +185,32 @@
 
     .filter-section {
         border: 1px solid #ccc;
-        border-radius: 8px;
-        padding: 1rem;
+        border-radius: 6px;
+        padding: 0.75rem 1rem;
         background-color: #f9f9f9;
         margin-bottom: 1.5rem;
     }
 
-    .filter-summary {
-        cursor: pointer;
-    }
-
     .filter-summary h2 {
-        display: inline-block;
+        display: inline;
+        font-size: 1.1rem;
+        cursor: pointer;
         margin: 0;
-        font-size: 1.2rem;
-        color: #333;
     }
 
     .filter-form {
         margin-top: 1rem;
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
     }
 
     .filter-fieldset {
-        border: 1px solid #ddd;
-        border-radius: 6px;
-        padding: 1rem;
-        background-color: #fff;
+        border: none;
+        padding: 0;
+        margin: 0 0 1rem 0;
     }
 
     .filter-fieldset legend {
-        font-weight: bold;
-        color: #444;
-        padding: 0 4px;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
     }
 
     .checkbox-row {
@@ -242,45 +222,34 @@
     .checkbox-label {
         display: flex;
         align-items: center;
-        gap: 6px;
-        font-weight: normal;
+        gap: 0.4rem;
         cursor: pointer;
-    }
-
-    .checkbox-label input[type="checkbox"] {
-        width: 18px;
-        height: 18px;
-        cursor: pointer;
+        font-size: 0.95rem;
     }
 
     .filter-warning {
-        color: #721c24;
-        font-weight: bold;
-        margin-top: 8px;
-        margin-bottom: 0;
+        color: #d9534f;
+        margin-top: 0.5rem;
+        font-size: 0.9rem;
+        font-weight: 600;
     }
 
     .sort-controls {
         display: flex;
         align-items: center;
-        gap: 1rem;
+        gap: 0.75rem;
         flex-wrap: wrap;
-    }
-
-    .sort-controls select {
-        padding: 0.4rem 0.8rem;
-        border: 1px solid #ccc;
-        border-radius: 4px;
+        margin-top: 0.5rem;
     }
 
     .apply-btn {
-        padding: 0.5rem 1rem;
+        padding: 0.35rem 0.8rem;
         background-color: #007bff;
-        color: white;
+        color: #fff;
         border: none;
         border-radius: 4px;
         cursor: pointer;
-        font-weight: bold;
+
     }
 
     .apply-btn:hover {
@@ -288,28 +257,26 @@
     }
 
     .playlists-section {
-        margin-bottom: 1.5rem;
-    }
-
-    .playlists-section h3 {
-        margin-bottom: 0.75rem;
+        margin-bottom: 2rem;
     }
 
     .playlists-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
         gap: 1rem;
+        margin-top: 0.5rem;
     }
 
     .playlist-card {
-        border: 1px solid #ccc;
+        border: 1px solid #ddd;
         border-radius: 6px;
         padding: 1rem;
         background-color: #fff;
     }
 
     .playlist-card h3 {
-        margin: 0 0 0.4rem 0;
+        margin: 0 0 0.5rem 0;
+        font-size: 1.1rem;
     }
 
     .playlist-card h3 a {
@@ -317,14 +284,14 @@
         text-decoration: none;
     }
 
+    .playlist-card h3 a:hover {
+        text-decoration: underline;
+    }
+
     .playlist-card p {
         margin: 0;
         font-size: 0.9rem;
         color: #666;
-    }
-
-    .byline {
-        margin-top: 4px !important;
     }
 
     .byline a {

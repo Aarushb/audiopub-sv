@@ -94,7 +94,6 @@ export const load: PageServerLoad = async (event) => {
         },
         include: {
             model: User,
-            where: event.locals.user?.isAdmin ? {} : { isTrusted: true },
         },
         order: [["createdAt", "ASC"]],
     });
@@ -198,6 +197,12 @@ export const actions: Actions = {
 
         if (user.isBanned) {
             return fail(403, { message: "Banned users cannot comment" });
+        }
+
+        if (!user.isVerified) {
+            return fail(403, {
+                message: "Please verify your email before commenting.",
+            });
         }
 
         const formData = await event.request.formData();

@@ -16,9 +16,19 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-import { Audio, Comment, User, Playlist } from "$lib/server/database";
+import { Audio, Comment, User, Playlist, Stream } from "$lib/server/database";
 import { error, redirect } from "@sveltejs/kit";
+import { Op } from "sequelize";
 import type { Actions, PageServerLoad } from "./$types";
+import Subscription from "$lib/server/database/models/subscription";
+import { subscribe, unsubscribe } from "$lib/server/subscriptions";
+
+async function findUserByProfileParam(param: string) {
+    if (param.startsWith("@")) {
+        return User.findOne({ where: { name: param.slice(1).toLowerCase() } });
+    }
+    return User.findByPk(param);
+}
 
 export const load: PageServerLoad = async (event) => {
     const tab = event.url.searchParams.get("tab") || "clips";
@@ -27,12 +37,12 @@ export const load: PageServerLoad = async (event) => {
     const limit = 30;
     const offset = (page - 1) * limit;
 
-    const profileUser = await User.findByPk(event.params.id);
+    const profileUser = await findUserByProfileParam(event.params.id);
     if (!profileUser) {
         return redirect(303, "/");
     }
 
-    const [clipsData, archivesData, playlistsData] = await Promise.all([
+    const [clipsData, archivesData, playlistsData, activeStream, subscribersCount] = await Promise.all([
         Audio.findAndCountAll({
             where: { userId: profileUser.id, isLiveArchive: false },
             include: [Playlist, User],
@@ -54,17 +64,35 @@ export const load: PageServerLoad = async (event) => {
             offset,
             order: [["createdAt", "DESC"]],
         }),
+        Stream.findOne({
+            where: { userId: profileUser.id, state: { [Op.ne]: "finished" } },
+        }),
+        Subscription.count({
+            where: { subscribedToId: profileUser.id },
+        }),
     ]);
 
     let activeCount = clipsData.count;
     if (tab === "archives") activeCount = archivesData.count;
     if (tab === "playlists") activeCount = playlistsData.count;
 
+    const user = event.locals.user;
+    let isSubscribed = false;
+    if (user) {
+        const sub = await Subscription.findOne({
+            where: { subscriberId: user.id, subscribedToId: profileUser.id },
+        });
+        isSubscribed = !!sub;
+    }
+
     return {
         tab,
         clips: clipsData.rows.map((audio) => audio.toClientside()),
         archives: archivesData.rows.map((audio) => audio.toClientside()),
         playlists: playlistsData.rows.map((playlist) => playlist.toClientside(true, true)),
+        stream: activeStream?.toClientside(false) ?? null,
+        subscribers: subscribersCount,
+        isSubscribed,
         count: activeCount,
         page,
         limit,
@@ -79,7 +107,7 @@ export const actions: Actions = {
         if (!user || !user.isAdmin) {
             return error(403, "Forbidden");
         }
-        const userToBeBanned = await User.findByPk(event.params.id);
+        const userToBeBanned = await findUserByProfileParam(event.params.id);
         if (!userToBeBanned) {
             return error(404, "User not found");
         }
@@ -87,19 +115,19 @@ export const actions: Actions = {
         const reason = form.get("reason") as string;
         const message = form.get("message") as string;
         await userToBeBanned.ban(reason, message);
-        if (!userToBeBanned.isTrusted){
+        if (!userToBeBanned.isTrusted) {
             // Delete all audios and comments of the user.
             await Audio.destroy({ where: { userId: userToBeBanned.id } });
             await Comment.destroy({ where: { userId: userToBeBanned.id } });
         }
-        return redirect(303, `/user/${userToBeBanned.id}`);
+        return redirect(303, `/user/@${encodeURIComponent(userToBeBanned.name)}`);
     },
     warn: async (event) => {
         const user = event.locals.user;
         if (!user || !user.isAdmin) {
             return error(403, "Forbidden");
         }
-        const userToBeWarned = await User.findByPk(event.params.id);
+        const userToBeWarned = await findUserByProfileParam(event.params.id);
         if (!userToBeWarned) {
             return error(404, "User not found");
         }
@@ -107,18 +135,20 @@ export const actions: Actions = {
         const reason = form.get("reason") as string;
         const message = form.get("message") as string;
         await userToBeWarned.warn(reason, message);
-        return redirect(303, `/user/${userToBeWarned.id}`);
+        return redirect(303, `/user/@${encodeURIComponent(userToBeWarned.name)}`);
     },
     trust: async (event) => {
         const user = event.locals.user;
         if (!user || !user.isAdmin) {
             return error(403, "Forbidden");
         }
-        const userToBeTrusted = await User.findByPk(event.params.id);
+        const userToBeTrusted = await findUserByProfileParam(event.params.id);
         if (!userToBeTrusted) {
             return error(404, "User not found");
         }
         userToBeTrusted.isTrusted = true;
         await userToBeTrusted.save();
     },
+    subscribe,
+    unsubscribe,
 };

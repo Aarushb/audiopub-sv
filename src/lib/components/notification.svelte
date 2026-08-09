@@ -60,7 +60,7 @@
     {#if notification.type === NotificationType.comment && notification.target}
         {@const comment = notification.target as ClientsideComment}
         <h3>
-            <a href={`/user/${notification.actor?.id}`}>
+            <a href={notification.actor ? `/user/@${encodeURIComponent(notification.actor.name)}` : undefined}>
                 {notification.actor?.displayName}
             </a>
             Commented on <a {href}>{comment.audio?.title}</a>
@@ -70,10 +70,28 @@
     {:else if notification.type === NotificationType.favorite && notification.target}
         {@const audio = notification.target}
         <h3>
-            <a href={`/user/${notification.actor?.id}`}>
+            <a href={notification.actor ? `/user/@${encodeURIComponent(notification.actor.name)}` : undefined}>
                 {notification.actor?.displayName}
             </a>
             favorited <a {href}>{(audio as any).title}</a>
+            <span class="comment-date"> - {relativeTime}</span>
+        </h3>
+    {:else if notification.type == NotificationType.upload && notification.targetType == NotificationTargetType.audio}
+        {@const audio = notification.target}
+        <h3>
+            <a href={notification.actor ? `/user/@${encodeURIComponent(notification.actor.name)}` : undefined}>
+                {notification.actor?.displayName}
+            </a>
+            uploaded a new audio <a {href}>{(audio as any).title}</a>
+            <span class="comment-date"> - {relativeTime}</span>
+        </h3>
+    {:else if notification.type == NotificationType.upload && notification.targetType == NotificationTargetType.stream}
+        {@const stream = notification.target}
+        <h3>
+            <a href={notification.actor ? `/user/@${encodeURIComponent(notification.actor.name)}` : undefined}>
+                {notification.actor?.displayName}
+            </a>
+            went live!
             <span class="comment-date"> - {relativeTime}</span>
         </h3>
     {:else if notification.type === NotificationType.system}

@@ -18,7 +18,7 @@
 
 <h1>Your Profile</h1>
 
-<form use:enhance method="POST" class="profile-edit-form">
+<form use:enhance method="POST" action="?/updateProfile" class="profile-edit-form">
     {#if form?.message}
         <div class="error-message" role="alert">
             {form.message}
@@ -38,6 +38,14 @@
         maxlength="30"
     />
 
+    <label for="bio">Bio:</label>
+    <textarea
+        id="bio"
+        name="bio"
+        value={data.bio}
+        maxlength="1000"
+    ></textarea>
+
     <label for="password">New Password:</label>
     <input
         type="password"
@@ -49,6 +57,27 @@
 
     <button type="submit">Update Profile</button>
 </form>
+
+<section class="stream-key-section">
+    <h2>Stream Key</h2>
+    <p class="stream-key-display">
+        {data.streamKey ?? "No stream key set"}
+    </p>
+    {#if data.streamKey}
+        <button
+            type="button"
+            class="copy-key-btn"
+            on:click={() => navigator.clipboard.writeText(data.streamKey ?? "")}
+            >Copy</button
+        >
+    {/if}
+    <form use:enhance method="POST" action="?/resetStreamKey">
+        <button type="submit" class="reset-key-btn">Reset Stream Key</button>
+    </form>
+    <p class="stream-help-link">
+        <a href="/stream/instructions">How to stream?</a>
+    </p>
+</section>
 
 <h2>Your Content</h2>
 
@@ -145,7 +174,8 @@
 
     input[type="text"],
     input[type="email"],
-    input[type="password"] {
+    input[type="password"],
+    textarea {
         padding: 0.5rem;
         border: 1px solid #ccc;
         border-radius: 4px;
@@ -162,6 +192,14 @@
 
     button:hover {
         background-color: #444;
+    }
+
+    .stream-key-section {
+        max-width: 500px;
+        margin: 0 auto 2rem auto;
+        padding: 1rem;
+        border: 1px solid #eee;
+        border-radius: 8px;
     }
 
     h2 {
@@ -186,28 +224,31 @@
         transition: all 0.2s ease;
     }
 
-    .profile-tabs a.active,
-    .profile-tabs a[aria-selected="true"] {
+    .profile-tabs a:hover {
+        color: #000;
+    }
+
+    .profile-tabs a.active {
         color: #007bff;
         border-bottom-color: #007bff;
     }
 
     .playlists-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
         gap: 1rem;
-        margin-top: 1rem;
     }
 
     .playlist-card {
-        border: 1px solid #ccc;
+        border: 1px solid #ddd;
         border-radius: 6px;
         padding: 1rem;
-        background-color: #fff;
+        background: #fff;
     }
 
     .playlist-card h3 {
         margin: 0 0 0.5rem 0;
+        text-align: left;
     }
 
     .playlist-card h3 a {
@@ -217,11 +258,5 @@
 
     .playlist-card h3 a:hover {
         text-decoration: underline;
-    }
-
-    .playlist-card p {
-        margin: 0;
-        color: #666;
-        font-size: 0.9rem;
     }
 </style>

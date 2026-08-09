@@ -1,0 +1,7 @@
+{
+    "name": "Audiopub",
+    "short_name": "Audiopub",
+    "start_url": "/",
+    "display": "standalone",
+    "description": "An open audio sharing platform."
+}
