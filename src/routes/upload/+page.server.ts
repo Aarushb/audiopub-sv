@@ -97,11 +97,15 @@ export const actions: Actions = {
             isLiveArchive,
         });
 
+        await fs.mkdir(path.dirname(audio.path), { recursive: true });
         await fs.writeFile(audio.path, Buffer.from(await file.arrayBuffer()));
         transcode(audio.path).catch(async (err) => {
-            console.error(err);
-            await audio.destroy();
-            await fs.unlink(audio.path);
+            console.warn("Transcoding failed or ffmpeg not present. Falling back to original file copy.");
+            try {
+                await fs.copyFile(audio.path, `${audio.path}.aac`);
+            } catch (copyErr) {
+                console.error("Fallback copy failed:", copyErr);
+            }
         });
 
         if (playlistIds && playlistIds.length > 0) {
