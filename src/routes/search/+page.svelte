@@ -2,35 +2,100 @@
   This file is part of the audiopub project.
   
   Copyright (C) 2024 the-byte-bender
-  
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-  
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-  GNU Affero General Public License for more details.
-  
-  You should have received a copy of the GNU Affero General Public License
-  along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
-  export let data;
   import AudioList from "$lib/components/audio_list.svelte";
   import title from "$lib/title";
   import { onMount } from "svelte";
+
+  export let data;
+
   onMount(() => title.set(`Search results for: ${data.query}`));
 </script>
+
 <h1>Search results for: {data.query}</h1>
 
-<AudioList audios={data.audios} currentUser={data.user} page={data.page} totalPages={0} paginationBaseUrl={`/search`} />
+{#if data.searchType === "playlist"}
+  <h2>Playlist Results</h2>
+  {#if data.playlists && data.playlists.length > 0}
+    <div class="playlists-grid">
+      {#each data.playlists as playlist (playlist.id)}
+        <article class="playlist-card">
+          <h3>
+            <a href={`/playlist/${playlist.id}`}>{playlist.name}</a>
+          </h3>
+          <p>{playlist.trackCount ?? playlist.audios?.length ?? 0} tracks</p>
+          {#if playlist.user}
+            <p class="byline">Created by <a href={`/user/${playlist.user.id}`}>{playlist.user.displayName}</a></p>
+          {/if}
+        </article>
+      {/each}
+    </div>
+  {:else}
+    <p>No playlists found matching "{data.query}".</p>
+  {/if}
+{:else if data.searchType === "live"}
+  <h2>Live Archive Results</h2>
+  {#if data.audios && data.audios.length > 0}
+    <AudioList audios={data.audios} currentUser={data.user} page={data.page} totalPages={0} paginationBaseUrl={`/search?q=${encodeURIComponent(data.query)}`} />
+  {:else}
+    <p>No live archives found matching "{data.query}".</p>
+  {/if}
+{:else}
+  {#if data.audios && data.audios.length > 0}
+    <AudioList audios={data.audios} currentUser={data.user} page={data.page} totalPages={0} paginationBaseUrl={`/search?q=${encodeURIComponent(data.query)}`} />
+  {:else}
+    <p>No audio results found matching "{data.query}".</p>
+  {/if}
+{/if}
 
 <style>
   h1 {
     text-align: center;
     margin-bottom: 1rem;
     color: #333;
+  }
+
+  h2 {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    color: #444;
+  }
+
+  .playlists-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  .playlist-card {
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 1rem;
+    background-color: #fff;
+  }
+
+  .playlist-card h3 {
+    margin: 0 0 0.5rem 0;
+  }
+
+  .playlist-card h3 a {
+    color: #007bff;
+    text-decoration: none;
+  }
+
+  .playlist-card h3 a:hover {
+    text-decoration: underline;
+  }
+
+  .playlist-card p {
+    margin: 0;
+    color: #666;
+    font-size: 0.9rem;
+  }
+
+  .byline a {
+    color: #007bff;
   }
 </style>
