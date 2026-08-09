@@ -126,7 +126,14 @@
                     {/if}
                 </a>
                 <a href="/favorites">Favorites</a>
-                <a href="/upload">Upload</a>
+                <details class="create-menu">
+                    <summary class="create-summary">Create</summary>
+                    <div class="create-dropdown">
+                        <a href="/upload">Upload</a>
+                        <a href="/upload?type=live">Go Live</a>
+                        <a href="/playlist/create">Make Playlist</a>
+                    </div>
+                </details>
                 <a href="/profile">Profile</a>
                 <a href="/logout">Logout</a>
             {/if}
@@ -180,6 +187,11 @@
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
+    nav {
+        display: flex;
+        align-items: center;
+    }
+
     nav a {
         margin-right: 10px;
         text-decoration: none;
@@ -188,6 +200,47 @@
 
     nav a:hover {
         color: #000;
+    }
+
+    .create-menu {
+        display: inline-block;
+        position: relative;
+        margin-right: 10px;
+    }
+
+    .create-summary {
+        cursor: pointer;
+        font-weight: 600;
+        color: #333;
+        padding: 4px 8px;
+    }
+
+    .create-summary:hover {
+        color: #000;
+    }
+
+    .create-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        background: #fff;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        padding: 8px 0;
+        z-index: 1001;
+        min-width: 140px;
+    }
+
+    .create-dropdown a {
+        display: block;
+        padding: 6px 12px;
+        margin-right: 0;
+        color: #333;
+    }
+
+    .create-dropdown a:hover {
+        background-color: #f0f0f0;
     }
 
     .notifications-link {

@@ -20,11 +20,16 @@
     import { enhance } from "$app/forms";
     import title from "$lib/title";
     import { onMount } from "svelte";
-    onMount(() => title.set("Upload Audio"));
+    import type { PageData } from "./$types";
+
+    export let data: PageData;
+
+    $: pageTitle = data.isLive ? "Go Live (Publish Live Archive)" : "Upload Audio";
+    onMount(() => title.set(pageTitle));
     let submitting = false;
 </script>
 
-<h1>Upload Audio</h1>
+<h1>{pageTitle}</h1>
 
 <form
     use:enhance={() => {
@@ -37,6 +42,10 @@
     method="POST"
     enctype="multipart/form-data"
 >
+    {#if data.isLive}
+        <input type="hidden" name="isLiveArchive" value="true" />
+    {/if}
+
     <div class="form-group">
         <label for="title">Title:</label>
         <input
@@ -58,6 +67,41 @@
             class="form-control"
         ></textarea>
     </div>
+
+    {#if !data.isLive}
+        <div class="form-group checkbox-group">
+            <label for="isLiveArchive" class="checkbox-label">
+                <input
+                    type="checkbox"
+                    id="isLiveArchive"
+                    name="isLiveArchive"
+                    value="true"
+                />
+                Mark as Live Archive
+            </label>
+        </div>
+    {/if}
+
+    {#if data.playlists && data.playlists.length > 0}
+        <div class="form-group">
+            <fieldset class="playlists-fieldset">
+                <legend>Add to Playlists (Optional):</legend>
+                <div class="playlist-checkbox-grid">
+                    {#each data.playlists as playlist (playlist.id)}
+                        <label class="checkbox-label">
+                            <input
+                                type="checkbox"
+                                name="playlistIds"
+                                value={playlist.id}
+                            />
+                            {playlist.name}
+                        </label>
+                    {/each}
+                </div>
+            </fieldset>
+        </div>
+    {/if}
+
     <div class="form-group">
         <label for="audio">Audio File:</label>
         <input
@@ -68,6 +112,7 @@
             class="form-control"
         />
     </div>
+
     <p class="info">
         Most known audio formats should be supported. Your audio may be
         transcoded for browsers that do not support the original format. For
@@ -114,6 +159,39 @@
         margin-bottom: 0.5rem;
         font-weight: bold;
         color: #555;
+    }
+
+    .checkbox-group {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: normal;
+        cursor: pointer;
+    }
+
+    .playlists-fieldset {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 12px;
+        background: #fff;
+    }
+
+    .playlists-fieldset legend {
+        font-weight: bold;
+        color: #555;
+        padding: 0 4px;
+    }
+
+    .playlist-checkbox-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 4px;
     }
 
     .form-control {

@@ -2,26 +2,15 @@
   This file is part of the audiopub project.
   
   Copyright (C) 2024 the-byte-bender
-  
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-  
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-  GNU Affero General Public License for more details.
-  
-  You should have received a copy of the GNU Affero General Public License
-  along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
     import { enhance } from "$app/forms";
     import AudioList from "$lib/components/audio_list.svelte";
     import title from "$lib/title.js";
     import { onMount } from "svelte";
+
     export let data;
+
     onMount(() => title.set(`${data.profileUser.displayName}'s Profile`));
 </script>
 
@@ -36,10 +25,6 @@
         <tr>
             <td>Display Name</td>
             <td>{data.profileUser.displayName}</td>
-        </tr>
-        <tr>
-            <td>Uploads</td>
-            <td>{data.count}</td>
         </tr>
     </tbody>
 </table>
@@ -75,15 +60,71 @@
     </details>
 {/if}
 
-<h2>Uploads</h2>
+<h2>Content</h2>
 
-<AudioList
-    audios={data.audios}
-    groupThreshold={0}
-    page={data.page}
-    totalPages={data.totalPages}
-    paginationBaseUrl={`/user/${data.profileUser.id}`}
-/>
+<nav class="profile-tabs" aria-label="User Content Tabs">
+    <a
+        href={`/user/${data.profileUser.id}?tab=clips`}
+        class:active={data.tab === "clips"}
+        aria-selected={data.tab === "clips"}
+        role="tab"
+    >
+        Uploaded Clips ({data.clips.length})
+    </a>
+    <a
+        href={`/user/${data.profileUser.id}?tab=archives`}
+        class:active={data.tab === "archives"}
+        aria-selected={data.tab === "archives"}
+        role="tab"
+    >
+        Live Archives ({data.archives.length})
+    </a>
+    <a
+        href={`/user/${data.profileUser.id}?tab=playlists`}
+        class:active={data.tab === "playlists"}
+        aria-selected={data.tab === "playlists"}
+        role="tab"
+    >
+        Playlists ({data.playlists.length})
+    </a>
+</nav>
+
+<section class="tab-content" role="tabpanel">
+    {#if data.tab === "clips"}
+        <AudioList
+            audios={data.clips}
+            groupThreshold={0}
+            page={data.page}
+            totalPages={data.totalPages}
+            paginationBaseUrl={`/user/${data.profileUser.id}?tab=clips`}
+            currentUser={data.user}
+        />
+    {:else if data.tab === "archives"}
+        <AudioList
+            audios={data.archives}
+            groupThreshold={0}
+            page={data.page}
+            totalPages={data.totalPages}
+            paginationBaseUrl={`/user/${data.profileUser.id}?tab=archives`}
+            currentUser={data.user}
+        />
+    {:else if data.tab === "playlists"}
+        {#if data.playlists && data.playlists.length > 0}
+            <div class="playlists-grid">
+                {#each data.playlists as playlist (playlist.id)}
+                    <article class="playlist-card">
+                        <h3>
+                            <a href={`/playlist/${playlist.id}`}>{playlist.name}</a>
+                        </h3>
+                        <p>{playlist.trackCount ?? playlist.audios?.length ?? 0} tracks</p>
+                    </article>
+                {/each}
+            </div>
+        {:else}
+            <p>This user has not created any playlists yet.</p>
+        {/if}
+    {/if}
+</section>
 
 <style>
     details {
@@ -126,5 +167,67 @@
 
     button:hover {
         background-color: #444;
+    }
+
+    h2 {
+        text-align: center;
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+    }
+
+    .profile-tabs {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        border-bottom: 2px solid #ccc;
+        margin-bottom: 1.5rem;
+    }
+
+    .profile-tabs a {
+        padding: 0.5rem 1rem;
+        text-decoration: none;
+        color: #555;
+        font-weight: bold;
+        border-bottom: 3px solid transparent;
+        transition: all 0.2s ease;
+    }
+
+    .profile-tabs a.active,
+    .profile-tabs a[aria-selected="true"] {
+        color: #007bff;
+        border-bottom-color: #007bff;
+    }
+
+    .playlists-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .playlist-card {
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        padding: 1rem;
+        background-color: #fff;
+    }
+
+    .playlist-card h3 {
+        margin: 0 0 0.5rem 0;
+    }
+
+    .playlist-card h3 a {
+        color: #007bff;
+        text-decoration: none;
+    }
+
+    .playlist-card h3 a:hover {
+        text-decoration: underline;
+    }
+
+    .playlist-card p {
+        margin: 0;
+        color: #666;
+        font-size: 0.9rem;
     }
 </style>

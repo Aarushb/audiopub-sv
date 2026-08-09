@@ -20,14 +20,26 @@ import fs from "fs/promises";
 import path from "path";
 import { error, fail, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
-import { Audio } from "$lib/server/database";
+import { Audio, Playlist, PlaylistAudio } from "$lib/server/database";
 import transcode from "$lib/server/transcode";
 
-export const load: PageServerLoad = (event) => {
+export const load: PageServerLoad = async (event) => {
     const user = event.locals.user;
     if (!user) {
         return redirect(303, "/login");
     }
+
+    const playlists = await Playlist.findAll({
+        where: { userId: user.id },
+        order: [["name", "ASC"]],
+    });
+
+    const isLive = event.url.searchParams.get("type") === "live";
+
+    return {
+        playlists: playlists.map((p) => p.toClientside(false, false)),
+        isLive,
+    };
 };
 
 export const actions: Actions = {
@@ -57,6 +69,9 @@ export const actions: Actions = {
         const file = form.get("file") as File;
         const title = form.get("title") as string;
         const description = form.get("description") as string;
+        const isLiveArchive = form.get("isLiveArchive") === "true" || event.url.searchParams.get("type") === "live";
+        const playlistIds = form.getAll("playlistIds") as string[];
+
         if (!file) {
             return fail(400, { title, description });
         }
@@ -79,13 +94,30 @@ export const actions: Actions = {
             hasFile: true,
             userId: user.id,
             extension: path.extname(file.name),
+            isLiveArchive,
         });
+
         await fs.writeFile(audio.path, Buffer.from(await file.arrayBuffer()));
         transcode(audio.path).catch(async (err) => {
             console.error(err);
             await audio.destroy();
             await fs.unlink(audio.path);
         });
+
+        if (playlistIds && playlistIds.length > 0) {
+            for (const playlistId of playlistIds) {
+                const playlist = await Playlist.findOne({ where: { id: playlistId, userId: user.id } });
+                if (playlist) {
+                    const currentCount = await PlaylistAudio.count({ where: { playlistId: playlist.id } });
+                    await PlaylistAudio.create({
+                        playlistId: playlist.id,
+                        audioId: audio.id,
+                        order: currentCount,
+                    });
+                }
+            }
+        }
+
         return redirect(303, `/listen/${audio.id}`);
     },
 };

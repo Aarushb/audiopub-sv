@@ -16,34 +16,63 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-import { Audio, Comment, User } from "$lib/server/database";
+import { Audio, Comment, User, Playlist } from "$lib/server/database";
 import { error, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
+    const tab = event.url.searchParams.get("tab") || "clips";
     const pageString = event.url.searchParams.get("page");
     const page = pageString ? parseInt(pageString, 10) : 1;
     const limit = 30;
     const offset = (page - 1) * limit;
+
     const profileUser = await User.findByPk(event.params.id);
     if (!profileUser) {
         return redirect(303, "/");
     }
-    const audios = await Audio.findAndCountAll({
-        where: { userId: profileUser.id},
-        limit,
-        offset,
-        order: [["createdAt", "DESC"]],
-    });
+
+    const [clipsData, archivesData, playlistsData] = await Promise.all([
+        Audio.findAndCountAll({
+            where: { userId: profileUser.id, isLiveArchive: false },
+            include: [Playlist, User],
+            limit,
+            offset,
+            order: [["createdAt", "DESC"]],
+        }),
+        Audio.findAndCountAll({
+            where: { userId: profileUser.id, isLiveArchive: true },
+            include: [Playlist, User],
+            limit,
+            offset,
+            order: [["createdAt", "DESC"]],
+        }),
+        Playlist.findAndCountAll({
+            where: { userId: profileUser.id },
+            include: [User, { model: Audio, include: [User] }],
+            limit,
+            offset,
+            order: [["createdAt", "DESC"]],
+        }),
+    ]);
+
+    let activeCount = clipsData.count;
+    if (tab === "archives") activeCount = archivesData.count;
+    if (tab === "playlists") activeCount = playlistsData.count;
+
     return {
-        audios: audios.rows.map((audio) => audio.toClientside()),
-        count: audios.count,
+        tab,
+        clips: clipsData.rows.map((audio) => audio.toClientside()),
+        archives: archivesData.rows.map((audio) => audio.toClientside()),
+        playlists: playlistsData.rows.map((playlist) => playlist.toClientside(true, true)),
+        count: activeCount,
         page,
         limit,
-        totalPages: Math.ceil(audios.count / limit),
+        totalPages: Math.ceil(activeCount / limit),
         profileUser: profileUser.toClientside(),
     };
 };
+
 export const actions: Actions = {
     ban: async (event) => {
         const user = event.locals.user;

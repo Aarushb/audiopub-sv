@@ -18,7 +18,7 @@
  */
 import { fail, redirect, type Actions } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
-import { User, Audio } from "$lib/server/database";
+import { User, Audio, Playlist } from "$lib/server/database";
 import { hash } from "bcrypt";
 
 export const load: PageServerLoad = async (event) => {
@@ -27,27 +27,52 @@ export const load: PageServerLoad = async (event) => {
     return redirect(303, "/login");
   }
 
+  const tab = event.url.searchParams.get("tab") || "clips";
   const pageString = event.url.searchParams.get("page");
   const page = pageString ? parseInt(pageString, 10) : 1;
   const limit = 30;
   const offset = (page - 1) * limit;
 
-  const audios = await Audio.findAndCountAll({
-    where: { userId: user.id },
-    limit,
-    offset,
-    order: [["createdAt", "DESC"]],
-  });
+  const [clipsData, archivesData, playlistsData] = await Promise.all([
+    Audio.findAndCountAll({
+      where: { userId: user.id, isLiveArchive: false },
+      include: [Playlist, User],
+      limit,
+      offset,
+      order: [["createdAt", "DESC"]],
+    }),
+    Audio.findAndCountAll({
+      where: { userId: user.id, isLiveArchive: true },
+      include: [Playlist, User],
+      limit,
+      offset,
+      order: [["createdAt", "DESC"]],
+    }),
+    Playlist.findAndCountAll({
+      where: { userId: user.id },
+      include: [User, { model: Audio, include: [User] }],
+      limit,
+      offset,
+      order: [["createdAt", "DESC"]],
+    }),
+  ]);
+
+  let activeCount = clipsData.count;
+  if (tab === "archives") activeCount = archivesData.count;
+  if (tab === "playlists") activeCount = playlistsData.count;
 
   return {
     name: user.name,
     email: user.email,
     displayName: user.displayName,
-    audios: audios.rows.map((audio) => audio.toClientside()),
-    count: audios.count,
+    tab,
+    clips: clipsData.rows.map((audio) => audio.toClientside()),
+    archives: archivesData.rows.map((audio) => audio.toClientside()),
+    playlists: playlistsData.rows.map((playlist) => playlist.toClientside(true, true)),
+    count: activeCount,
     page,
     limit,
-    totalPages: Math.ceil(audios.count / limit),
+    totalPages: Math.ceil(activeCount / limit),
     profileUser: user.toClientside(),
   };
 };

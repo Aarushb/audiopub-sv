@@ -2,36 +2,23 @@
   This file is part of the audiopub project.
   
   Copyright (C) 2025 the-byte-bender
-  
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-  
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-  GNU Affero General Public License for more details.
-  
-  You should have received a copy of the GNU Affero General Public License
-  along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
     import { enhance } from "$app/forms";
-    import type { PageData } from "./$types";
-    import type { ActionData } from "./$types";
+    import type { PageData, ActionData } from "./$types";
     import AudioList from "$lib/components/audio_list.svelte";
     import title from "$lib/title";
     import { onMount } from "svelte";
-    onMount(() => title.set("Your profile"));
 
     export let data: PageData;
     export let form: ActionData;
+
+    onMount(() => title.set("Your profile"));
 </script>
 
 <h1>Your Profile</h1>
 
-<form use:enhance method="POST">
+<form use:enhance method="POST" class="profile-edit-form">
     {#if form?.message}
         <div class="error-message" role="alert">
             {form.message}
@@ -40,6 +27,7 @@
 
     <label for="email">Email:</label>
     <input type="email" id="email" name="email" value={data.email} />
+
     <label for="displayName">Display Name:</label>
     <input
         type="text"
@@ -49,6 +37,7 @@
         minlength="3"
         maxlength="30"
     />
+
     <label for="password">New Password:</label>
     <input
         type="password"
@@ -57,18 +46,75 @@
         minlength="8"
         maxlength="64"
     />
-    <button type="submit">Update</button>
+
+    <button type="submit">Update Profile</button>
 </form>
 
-<h2>Your Uploads</h2>
+<h2>Your Content</h2>
 
-<AudioList
-    audios={data.audios}
-    groupThreshold={0}
-    page={data.page}
-    totalPages={data.totalPages}
-    paginationBaseUrl={`/profile`}
-/>
+<nav class="profile-tabs" aria-label="Content Tabs">
+    <a
+        href="/profile?tab=clips"
+        class:active={data.tab === "clips"}
+        aria-selected={data.tab === "clips"}
+        role="tab"
+    >
+        Uploaded Clips ({data.clips.length})
+    </a>
+    <a
+        href="/profile?tab=archives"
+        class:active={data.tab === "archives"}
+        aria-selected={data.tab === "archives"}
+        role="tab"
+    >
+        Live Archives ({data.archives.length})
+    </a>
+    <a
+        href="/profile?tab=playlists"
+        class:active={data.tab === "playlists"}
+        aria-selected={data.tab === "playlists"}
+        role="tab"
+    >
+        Playlists ({data.playlists.length})
+    </a>
+</nav>
+
+<section class="tab-content" role="tabpanel">
+    {#if data.tab === "clips"}
+        <AudioList
+            audios={data.clips}
+            groupThreshold={0}
+            page={data.page}
+            totalPages={data.totalPages}
+            paginationBaseUrl="/profile?tab=clips"
+            currentUser={data.profileUser}
+        />
+    {:else if data.tab === "archives"}
+        <AudioList
+            audios={data.archives}
+            groupThreshold={0}
+            page={data.page}
+            totalPages={data.totalPages}
+            paginationBaseUrl="/profile?tab=archives"
+            currentUser={data.profileUser}
+        />
+    {:else if data.tab === "playlists"}
+        {#if data.playlists && data.playlists.length > 0}
+            <div class="playlists-grid">
+                {#each data.playlists as playlist (playlist.id)}
+                    <article class="playlist-card">
+                        <h3>
+                            <a href={`/playlist/${playlist.id}`}>{playlist.name}</a>
+                        </h3>
+                        <p>{playlist.trackCount ?? playlist.audios?.length ?? 0} tracks</p>
+                    </article>
+                {/each}
+            </div>
+        {:else}
+            <p>You have not created any playlists yet. <a href="/playlist/create">Make a playlist</a>.</p>
+        {/if}
+    {/if}
+</section>
 
 <style>
     .error-message {
@@ -80,12 +126,17 @@
         margin-bottom: 1rem;
     }
 
-    form {
+    .profile-edit-form {
         display: flex;
         flex-direction: column;
         gap: 1rem;
-        width: fit-content;
-        margin: auto;
+        width: 100%;
+        max-width: 500px;
+        margin: 0 auto 2rem auto;
+        padding: 1.5rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background-color: #f9f9f9;
     }
 
     label {
@@ -93,9 +144,11 @@
     }
 
     input[type="text"],
-    input[type="email"] {
+    input[type="email"],
+    input[type="password"] {
         padding: 0.5rem;
         border: 1px solid #ccc;
+        border-radius: 4px;
     }
 
     button {
@@ -109,5 +162,66 @@
 
     button:hover {
         background-color: #444;
+    }
+
+    h2 {
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+
+    .profile-tabs {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        border-bottom: 2px solid #ccc;
+        margin-bottom: 1.5rem;
+    }
+
+    .profile-tabs a {
+        padding: 0.5rem 1rem;
+        text-decoration: none;
+        color: #555;
+        font-weight: bold;
+        border-bottom: 3px solid transparent;
+        transition: all 0.2s ease;
+    }
+
+    .profile-tabs a.active,
+    .profile-tabs a[aria-selected="true"] {
+        color: #007bff;
+        border-bottom-color: #007bff;
+    }
+
+    .playlists-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .playlist-card {
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        padding: 1rem;
+        background-color: #fff;
+    }
+
+    .playlist-card h3 {
+        margin: 0 0 0.5rem 0;
+    }
+
+    .playlist-card h3 a {
+        color: #007bff;
+        text-decoration: none;
+    }
+
+    .playlist-card h3 a:hover {
+        text-decoration: underline;
+    }
+
+    .playlist-card p {
+        margin: 0;
+        color: #666;
+        font-size: 0.9rem;
     }
 </style>

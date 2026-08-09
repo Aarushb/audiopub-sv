@@ -39,11 +39,19 @@
         <a href={`/listen/${audio.id}`}>{audio.title}</a>
         <span class="stats"> | {audio.playsString} | {favoritesString}</span>
     </h3>
-    {#if audio.user}
-        <p>
+    <p>
+        {#if audio.playlists && audio.playlists.length > 0}
+            <span class="playlist-info">
+                {#each audio.playlists as playlist, i}
+                    Part of <a href={`/playlist/${playlist.id}`}>{playlist.name}</a>{i < audio.playlists.length - 1 ? ", " : ""}
+                {/each}
+            </span>
+            {#if audio.user} | {/if}
+        {/if}
+        {#if audio.user}
             By <a href={`/user/${audio.user.id}`}>{audio.user.displayName}</a>
-        </p>
-    {/if}
+        {/if}
+    </p>
     <SafeMarkdown source={audio.description} />
 </article>
 
