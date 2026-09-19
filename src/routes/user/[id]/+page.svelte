@@ -22,6 +22,7 @@
     import SafeMarkdown from "$lib/components/safe_markdown.svelte";
     import StreamCard from "$lib/components/stream_card.svelte";
     import SubscribeButton from "$lib/components/subscribe_button.svelte";
+    import MuteButton from "$lib/components/mute_button.svelte";
     import title from "$lib/title.js";
     import { onMount } from "svelte";
     export let data;
@@ -74,7 +75,16 @@
 </table>
 
 {#if data.user && data.user.id != data.profileUser.id}
-<SubscribeButton isSubscribed={data.isSubscribed}></SubscribeButton>
+    {#if !data.isMuted}
+        <SubscribeButton isSubscribed={data.isSubscribed}></SubscribeButton>
+    {/if}
+    {#if data.canBeMutedByUser}
+        <MuteButton
+            isMuted={data.isMuted}
+            isSubscribed={data.isSubscribed}
+            displayName={data.profileUser.displayName}
+        />
+    {/if}
 {/if}
 
 {#if data.profileUser.bio != ""}

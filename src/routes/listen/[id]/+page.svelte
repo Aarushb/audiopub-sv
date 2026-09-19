@@ -27,6 +27,7 @@
     import SafeMarkdown from "$lib/components/safe_markdown.svelte";
     import type { ClientsideComment } from "$lib/types.js";
     import SubscribeButton from "$lib/components/subscribe_button.svelte";
+    import MuteButton from "$lib/components/mute_button.svelte";
     import AudioPlayer from "$lib/components/audio_player.svelte";
     import Modal from "$lib/components/modal.svelte";
 
@@ -248,7 +249,17 @@
             >
         </p>
         {#if data.user && data.user.id != data.audio.user.id}
-            <SubscribeButton isSubscribed={data.isSubscribed}></SubscribeButton>
+            {#if !data.isMuted}
+                <SubscribeButton isSubscribed={data.isSubscribed}
+                ></SubscribeButton>
+            {/if}
+            {#if data.canBeMutedByUser}
+                <MuteButton
+                    isMuted={data.isMuted}
+                    isSubscribed={data.isSubscribed}
+                    displayName={data.audio.user.displayName}
+                />
+            {/if}
         {/if}
     {/if}
     <p>Upload date: {new Date(data.audio.createdAt).toLocaleDateString()}</p>

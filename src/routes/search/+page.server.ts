@@ -20,7 +20,8 @@ import { error } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 import { Audio, User } from "$lib/server/database";
 import AudioFavorite from "$lib/server/database/models/audio_favorite";
-import { Sequelize } from "sequelize";
+import { Op, Sequelize } from "sequelize";
+import { getMutedUserIds } from "$lib/server/mutes";
 
 
 export const load: PageServerLoad = async (event) => {
@@ -31,11 +32,21 @@ export const load: PageServerLoad = async (event) => {
   if (!query || query.length < 3) {
     return error(400, "Query must be at least 3 characters long");
   }
+  // Search is deliberate rather than a feed, so muted uploaders are hidden by
+  // default but can be brought back for a single search.
+  const includeMuted = event.url.searchParams.get("includeMuted") === "on";
+  const mutedUserIds = await getMutedUserIds(event);
+  const mutesApply = !includeMuted && mutedUserIds.length > 0;
+
+  const matchesQuery = Sequelize.literal(
+    `MATCH(title, description) AGAINST(:query IN NATURAL LANGUAGE MODE)`
+  );
+
   // Query 1: Get audios with users (standard search query)
   const audios = await Audio.findAll({
-    where: Sequelize.literal(
-      `MATCH(title, description) AGAINST(:query IN NATURAL LANGUAGE MODE)`
-    ),
+    where: mutesApply
+      ? { [Op.and]: [matchesQuery, { userId: { [Op.notIn]: mutedUserIds } }] }
+      : matchesQuery,
     replacements: { query },
     limit: 30,
     offset: (page - 1) * 30,
@@ -45,6 +56,23 @@ export const load: PageServerLoad = async (event) => {
     },
     nest: true,
   });
+
+  // How many matches across the whole result set the mutes are keeping out, so
+  // the page can say so instead of silently coming up short.
+  // count() forwards replacements at runtime, but sequelize's CountOptions type
+  // does not list them, hence the cast.
+  const hiddenByMutes: number = mutesApply
+    ? ((await Audio.count({
+        where: {
+          [Op.and]: [matchesQuery, { userId: { [Op.in]: mutedUserIds } }],
+        },
+        replacements: { query },
+        include: {
+          model: User,
+          where: event.locals.user?.isAdmin ? {} : { isTrusted: true },
+        },
+      } as any)) as unknown as number)
+    : 0;
   
   // Query 2: Get favorite data efficiently
   const audioIds = audios.map(audio => audio.id);
@@ -98,5 +126,8 @@ export const load: PageServerLoad = async (event) => {
     }),
     query,
     page,
+    includeMuted,
+    hiddenByMutes,
+    hasMutes: mutedUserIds.length > 0,
   };
 };

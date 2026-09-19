@@ -20,6 +20,7 @@ import { Audio, User, Stream } from "$lib/server/database";
 import AudioFavorite from "$lib/server/database/models/audio_favorite";
 import type { PageServerLoad } from "./$types";
 import { type OrderItem, Sequelize, Op } from "sequelize";
+import { excludeMutedUsers, getMutedUserIds } from "$lib/server/mutes";
 
 export const load: PageServerLoad = async (event) => {
     const pageString = event.url.searchParams.get("page");
@@ -65,11 +66,16 @@ export const load: PageServerLoad = async (event) => {
         order = [[validatedSortField, validatedSortOrder]];
     }
 
+    const mutedUserIds = await getMutedUserIds(event);
+
     const audios = await Audio.findAndCountAll({
         limit,
         offset,
         order,
-        where: excludeArchives ? { archivedStreamId: { [Op.is]: null } } : {},
+        where: {
+            ...(excludeArchives ? { archivedStreamId: { [Op.is]: null } } : {}),
+            ...excludeMutedUsers(mutedUserIds),
+        },
         include: {
             model: User,
             where: event.locals.user?.isAdmin ? {} : { isTrusted: true },
@@ -127,7 +133,10 @@ export const load: PageServerLoad = async (event) => {
             page === 1
                 ? (
                       await Stream.findAll({
-                          where: { state: "active" } ,
+                          where: {
+                              state: "active",
+                              ...excludeMutedUsers(mutedUserIds),
+                          },
                           order: [["createdAt", "DESC"]],
                           include: User,
                       })

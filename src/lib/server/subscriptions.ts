@@ -1,6 +1,7 @@
 import { error, type RequestEvent } from "@sveltejs/kit";
 import Subscription from "./database/models/subscription";
 import { Audio, User } from "./database";
+import { isMuted } from "./mutes";
 
 export const subscribe = async (event: RequestEvent): Promise<any> => {
     const user = event.locals.user;
@@ -23,6 +24,12 @@ export const subscribe = async (event: RequestEvent): Promise<any> => {
         
     if (user.id == subscribedToUser.id) {
         return error(403, "Forbidden");
+    }
+
+    // Subscribing to someone whose uploads you have hidden would only produce a
+    // feed entry you never see.
+    if (await isMuted(event, subscribedToUser.id)) {
+        return error(409, "Unmute this user before subscribing to them");
     }
 
     try {
