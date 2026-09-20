@@ -29,6 +29,7 @@ import {
     AudioEdit,
     CommentEdit,
     PlaylistAudio,
+    Playlist,
 } from "$lib/server/database";
 import AudioFavorite from "$lib/server/database/models/audio_favorite";
 import { error, fail, redirect } from "@sveltejs/kit";
@@ -224,6 +225,24 @@ export const load: PageServerLoad = async (event) => {
         canMute(viewer) &&
         canBeMuted(uploader);
 
+    // Playlist membership is scoped to the clip owner's own playlists (an
+    // admin editing someone else's clip manages *their* playlists, not the
+    // admin's own) — matches the existing ownership rule already enforced
+    // at upload time.
+    let editablePlaylists: { id: string; name: string; checked: boolean }[] = [];
+    if (canEdit) {
+        const [ownedPlaylists, memberships] = await Promise.all([
+            Playlist.findAll({ where: { userId: audio.userId }, order: [["name", "ASC"]] }),
+            PlaylistAudio.findAll({ where: { audioId: audio.id }, attributes: ["playlistId"] }),
+        ]);
+        const memberPlaylistIds = new Set(memberships.map((m) => m.playlistId));
+        editablePlaylists = ownedPlaylists.map((p) => ({
+            id: p.id,
+            name: p.name,
+            checked: memberPlaylistIds.has(p.id),
+        }));
+    }
+
     return {
         isMuted,
         canBeMutedByUser,
@@ -231,6 +250,7 @@ export const load: PageServerLoad = async (event) => {
         comments: sortedComments.map((c) =>
             c.toClientside(false, true, commentEditsByCommentId, isAdminViewer),
         ),
+        editablePlaylists,
         mimeType: audio.mimeType,
         isFollowing,
         nextAudioId,
@@ -320,6 +340,7 @@ export const actions: Actions = {
             });
         }
 
+        let detailsChanged = false;
         try {
             const edit = await updateAudioDetails(
                 audio.id,
@@ -327,9 +348,7 @@ export const actions: Actions = {
                 title,
                 description,
             );
-            if (!edit) {
-                return fail(400, { editMessage: "No changes were made" });
-            }
+            detailsChanged = edit !== null;
         } catch (err) {
             if (err instanceof AudioEditLimitError) {
                 return fail(403, {
@@ -340,6 +359,39 @@ export const actions: Actions = {
                 return error(404, "Not found");
             }
             throw err;
+        }
+
+        // Only playlists the clip's own owner created are eligible — this
+        // runs for an admin editing someone else's clip too, so it can't be
+        // used to add a clip to a playlist the owner doesn't actually have.
+        const submittedPlaylistIds = new Set(form.getAll("playlistIds") as string[]);
+        const ownedPlaylists = await Playlist.findAll({
+            where: { userId: audio.userId },
+            attributes: ["id"],
+        });
+        const currentMemberships = await PlaylistAudio.findAll({
+            where: { audioId: audio.id },
+        });
+        const currentPlaylistIds = new Set(currentMemberships.map((m) => m.playlistId));
+
+        let playlistsChanged = false;
+        for (const playlist of ownedPlaylists) {
+            const shouldBeIn = submittedPlaylistIds.has(playlist.id);
+            const isIn = currentPlaylistIds.has(playlist.id);
+            if (shouldBeIn && !isIn) {
+                const order = await PlaylistAudio.count({ where: { playlistId: playlist.id } });
+                await PlaylistAudio.create({ playlistId: playlist.id, audioId: audio.id, order });
+                playlistsChanged = true;
+            } else if (!shouldBeIn && isIn) {
+                await PlaylistAudio.destroy({
+                    where: { playlistId: playlist.id, audioId: audio.id },
+                });
+                playlistsChanged = true;
+            }
+        }
+
+        if (!detailsChanged && !playlistsChanged) {
+            return fail(400, { editMessage: "No changes were made" });
         }
 
         return { editSuccess: true };

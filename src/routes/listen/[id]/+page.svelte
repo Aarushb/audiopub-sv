@@ -404,6 +404,24 @@
                         maxlength="5000"
                         value={data.audio.description}
                     ></textarea>
+                    {#if data.editablePlaylists && data.editablePlaylists.length > 0}
+                        <fieldset class="playlists-fieldset">
+                            <legend>Playlists:</legend>
+                            <div class="playlist-checkbox-grid">
+                                {#each data.editablePlaylists as playlist (playlist.id)}
+                                    <label class="checkbox-label">
+                                        <input
+                                            type="checkbox"
+                                            name="playlistIds"
+                                            value={playlist.id}
+                                            checked={playlist.checked}
+                                        />
+                                        {playlist.name}
+                                    </label>
+                                {/each}
+                            </div>
+                        </fieldset>
+                    {/if}
                     {#if data.remainingEdits !== null}
                         <p>{data.remainingEdits} edit(s) remaining.</p>
                     {/if}
@@ -707,6 +725,34 @@
 
     .edit-form textarea {
         min-height: 8rem;
+    }
+
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: normal;
+        cursor: pointer;
+    }
+
+    .playlists-fieldset {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 12px;
+        background: #fff;
+    }
+
+    .playlists-fieldset legend {
+        font-weight: bold;
+        color: #555;
+        padding: 0 4px;
+    }
+
+    .playlist-checkbox-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 4px;
     }
 
     .edit-history pre {
