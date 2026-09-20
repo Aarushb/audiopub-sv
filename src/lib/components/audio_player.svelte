@@ -29,6 +29,13 @@
     // preview embed) — toggling it there would still silently change the
     // site-wide autoplay preference via localStorage for no visible effect.
     export let showAutoplayToggle = true;
+    // Default true so callers that don't track boundaries (or don't wire
+    // next/prev at all) keep the buttons active. When explicitly false, the
+    // corresponding button is disabled rather than left clickable with no
+    // visible effect (next) or an unexplained history.back() (prev) — a
+    // screen reader user has no other way to know there's nothing there.
+    export let hasNext = true;
+    export let hasPrev = true;
     // When set, playback position for this track is remembered across visits
     // (like YouTube's "continue watching") via localStorage keyed by id.
     export let audioId: string | undefined = undefined;
@@ -300,6 +307,7 @@
                 on:click={() => dispatch("prev")}
                 aria-label="Previous track (P)"
                 title="Previous track (P)"
+                disabled={!hasPrev}
             >
                 <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
                     <polygon points="6,6 6,18 8,18 8,6" fill="currentColor" />
@@ -363,6 +371,7 @@
                 on:click={() => dispatch("next")}
                 aria-label="Next track (N)"
                 title="Next track (N)"
+                disabled={!hasNext}
             >
                 <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
                     <polygon points="6,6 15,12 6,18" fill="currentColor" />
@@ -484,6 +493,16 @@
     .ctrl:hover {
         background-color: #ddd;
         color: #000;
+    }
+
+    .ctrl:disabled {
+        cursor: default;
+        opacity: 0.4;
+    }
+
+    .ctrl:disabled:hover {
+        background-color: transparent;
+        color: #333;
     }
 
     .ctrl:focus-visible {

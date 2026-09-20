@@ -250,6 +250,8 @@
         on:next={handleNext}
         on:prev={handlePrev}
         {chapters}
+        hasNext={!!data.nextAudioId}
+        hasPrev={!!data.prevAudioId}
         audioId={data.audio.id}
         sources={[
             { src: `/${data.audio.path}`, type: data.mimeType },
