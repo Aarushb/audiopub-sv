@@ -2,6 +2,21 @@
 
 Spec: `docs/superpowers/specs/2026-09-19-listening-experience-upgrades-design.md`
 
+## 2026-09-20 — Pagination page-jump combobox (Task 2)
+
+Replaced the "Page X of Y" text in `audio_list.svelte`'s shared pagination
+block with a `<select>` listing every page (current one pre-selected) plus
+a "Go" button, keeping the existing Previous/Next links. Since this
+component is the single shared pagination renderer for every paginated
+route, no other files needed changes. Verified live by temporarily
+lowering the homepage's page size to 1 (reverted immediately after,
+confirmed via `git diff` showing no residual change) to force multiple
+pages: the combobox rendered correctly, selecting page 3 and clicking Go
+navigated there, and — importantly — all of the homepage's other query
+parameters (`sort`, `order`, the three `filter_*` flags) were correctly
+preserved as hidden form fields rather than being dropped, confirmed via
+the resulting URL.
+
 ## 2026-09-19/20 — Local environment bring-up and merge verification (Task 1)
 
 Brought up the local environment per the spec: `docker compose up -d` for
