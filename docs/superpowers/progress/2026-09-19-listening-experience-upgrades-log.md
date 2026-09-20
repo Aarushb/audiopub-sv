@@ -702,3 +702,89 @@ errors throughout. Committed as three atomic commits: `feat: announce
 track changes via aria-live on the listen page`, `feat: announce reply
 count and expand hint when navigating comments`, `feat: remember and
 resume playback position per track`.
+
+## 2026-09-20 — Filter-state regression and a wider sweep
+
+The user reported, sharply, that applying filters on the homepage, then
+visiting a clip, moving around with N/P, and returning home via the nav's
+"Home" link reset the filters back to default — and that this had been
+raised before. Root cause: filters/sort live entirely in the URL's query
+string (`+page.server.ts` reads `filter_clips`/`filter_archives`/
+`filter_playlists`/`sort`/`order` straight off `event.url.searchParams`),
+but the nav's Home link, like most "go back to the homepage" links, is a
+bare `href="/"` with no query string at all — so every such navigation
+silently fell through to the hardcoded defaults, discarding whatever the
+user had deliberately chosen, no matter how recently.
+
+Fixed with a cookie (`audiopub_home_filters`, `src/routes/+page.server.ts`):
+whenever a request arrives with explicit filter or sort params, the
+resolved values are saved to a 1-year cookie; whenever a request arrives
+*without* them (a bare `/`), those saved values are used as the fallback
+before finally defaulting to clips+archives+playlists all on, sorted by
+date descending. Explicit params in the URL always take precedence over
+the cookie, so the "Apply Filters" form and paginated links (which already
+carry full filter+sort query strings) are unaffected and immediately
+update the saved cookie on every change. Verified live end-to-end exactly
+as reported: applied `playlists` off + sort by title ascending, opened a
+clip, clicked Next, clicked the nav's Home link, and confirmed via the
+DOM that the filter panel still reflected `playlists` off and the sort
+selects still showed title/ascending — with a bare `/` URL and no query
+string in sight.
+
+Given the explicit instruction to stop being lazy about what *can* be
+tested and sweep thoroughly, went looking for the same class of bug
+elsewhere rather than considering the ticket closed:
+
+- **Found a real one**: the Autoplay checkbox lives in `audio_player.svelte`
+  with its own private `autoplayEnabled`, while the decision to actually
+  auto-advance on `ended` lives in `listen/[id]/+page.svelte`'s own,
+  *separate* `autoplayEnabled` variable — both read the same
+  `audiopub_autoplay` localStorage key on mount, so a fresh page load was
+  always consistent, but toggling the checkbox mid-session only updated
+  the child's copy. The page's `handleEnded()` kept acting on a stale
+  value until the next full navigation resynced it — so switching autoplay
+  off mid-track and letting it end would still silently advance anyway.
+  Fixed by making `audio_player.svelte`'s `autoplayEnabled` an
+  `export let` and binding it from the page (`bind:autoplayEnabled`),
+  making it one shared value instead of two independently-initialized
+  copies. Verified live in both directions via direct event dispatch:
+  toggled off mid-session then dispatched `ended` → no navigation;
+  toggled back on → `ended` correctly navigated to the next track.
+- **Found a related one while in there**: that same Autoplay checkbox
+  rendered unconditionally, including on the live-stream player (where
+  there's no "next track" for it to affect at all) and on the upload
+  page's pinned-announcement preview player, where toggling it would
+  silently rewrite the user's site-wide `audiopub_autoplay` preference as
+  a pure side effect of poking at a preview embed. Added a
+  `showAutoplayToggle` prop (default on) and hid it for `live` players and
+  explicitly for the upload-page preview.
+- Re-verified, rather than assumed, several other areas this session
+  touched or could plausibly have regressed: the "at least one filter
+  must stay checked" guard (still reverts correctly), the `?` keyboard-
+  shortcuts modal (initially looked broken against a `[role="dialog"]`
+  selector — false alarm, it uses a native `<dialog>` element which
+  doesn't need that role, confirmed working via `dialog.open`), the
+  `live:` search prefix (still returns live-archive results, no errors),
+  and a full real playlist-creation flow end-to-end (registered account →
+  verified/trusted directly in the dev DB since there's no UI shortcut for
+  that → uploaded a real test clip → created a playlist containing it →
+  confirmed it appears correctly grouped on the homepage as a collapsed
+  H3/H4 disclosure alongside the pre-existing seed playlists) — all clean,
+  no regressions found in these areas. Also chased down what looked like a
+  checkbox-label accessibility bug (`read_page` reported a raw UUID as a
+  checkbox's name on the playlist-create page) that turned out to be a
+  limitation of that inspection tool's own accessible-name heuristic, not
+  a real bug — the actual DOM has a proper `<label>` wrapping the checkbox
+  with the track's real title, which is what a real screen reader
+  computes from.
+
+### Verification
+
+`npm run check` — 0 errors, 0 warnings, 1041 files. `npm run build` —
+succeeds. All fixes verified live via real browser interaction (form
+submissions, real navigations, direct event dispatch), not just read for
+plausibility. Test artifacts (a throwaway account's test upload and
+playlist) cleaned up from the dev DB afterward. Committed as two atomic
+commits: `fix: persist home filter and sort selections across bare
+navigations`, `fix: sync autoplay toggle with page state and scope it
+away from previews`.
