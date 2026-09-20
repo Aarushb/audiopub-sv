@@ -63,6 +63,17 @@
 
     const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
+    // bind:currentTime only resyncs from the "timeupdate" event, which
+    // doesn't fire for a programmatic seek while paused — so every seek
+    // that isn't the visible slider's own on:input has to update the
+    // reactive value itself, or the seek bar/time text/aria-valuetext stay
+    // frozen at the old position until playback starts.
+    function setPosition(time: number) {
+        if (!audioElement) return;
+        audioElement.currentTime = time;
+        currentTime = time;
+    }
+
     function playbackPositionKey(id: string) {
         return `audiopub_playback_${id}`;
     }
@@ -77,7 +88,7 @@
         if (!isFinite(savedTime) || savedTime < 5) return;
         const dur = audioElement.duration;
         if (isFinite(dur) && dur > 0 && savedTime > dur * 0.95) return;
-        audioElement.currentTime = savedTime;
+        setPosition(savedTime);
     }
 
     function savePlaybackPosition() {
@@ -129,9 +140,11 @@
 
     function seek(seconds: number) {
         if (!audioElement || !isFinite(audioElement.duration)) return;
-        audioElement.currentTime = Math.max(
-            0,
-            Math.min(audioElement.duration, audioElement.currentTime + seconds),
+        setPosition(
+            Math.max(
+                0,
+                Math.min(audioElement.duration, audioElement.currentTime + seconds),
+            ),
         );
     }
 
@@ -143,20 +156,18 @@
     function jumpToPreviousChapter() {
         if (!audioElement || chapters.length === 0) return;
         const previous = [...chapters].reverse().find((c) => c.time < audioElement!.currentTime - 1);
-        audioElement.currentTime = previous ? previous.time : 0;
+        setPosition(previous ? previous.time : 0);
     }
 
     function jumpToNextChapter() {
         if (!audioElement || chapters.length === 0) return;
         const next = chapters.find((c) => c.time > audioElement!.currentTime + 0.5);
-        if (next) audioElement.currentTime = next.time;
+        if (next) setPosition(next.time);
     }
 
     function onSeekInput(event: Event) {
-        if (!audioElement) return;
         const value = Number((event.currentTarget as HTMLInputElement).value);
-        audioElement.currentTime = value;
-        currentTime = value;
+        setPosition(value);
     }
 
     function onVolumeInput(event: Event) {
