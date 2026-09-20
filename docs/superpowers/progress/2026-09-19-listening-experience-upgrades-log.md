@@ -2,6 +2,19 @@
 
 Spec: `docs/superpowers/specs/2026-09-19-listening-experience-upgrades-design.md`
 
+## 2026-09-20 — Global keyboard shortcuts help modal (Task 6)
+
+Created `keyboard_shortcuts_modal.svelte`, reusing the existing native
+`<dialog>`-based `Modal` component, listing every shortcut across the
+player, comments, and general navigation grouped under headings. Wired a
+global `?` handler into `+layout.svelte`'s existing `onMount`
+(added/removed alongside its other window listeners), guarded the same
+way the player already guards its own shortcuts (ignores modifier-key
+combinations and input/textarea focus). Verified live: `?` from the
+homepage opens the modal with the full grouped list; `Esc` closes it for
+free via the underlying native `<dialog>` (no extra code needed); typing
+`?` while focused in the comment textarea does not open it.
+
 ## 2026-09-20 — Chapter-jump keyboard shortcut (Task 5)
 
 Added a `chapters: { time: number }[] = []` prop to `audio_player.svelte`
