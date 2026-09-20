@@ -303,6 +303,24 @@
         </details>
     {/if}
 
+    {#if data.user}
+        {#if data.audio.user && data.audio.user.id !== data.user.id}
+            {#if data.isFollowing}
+                <form use:enhance action="?/unfollow" method="POST">
+                    <button type="submit"
+                        >Unfollow notifications from this audio</button
+                    >
+                </form>
+            {:else}
+                <form use:enhance action="?/follow" method="POST">
+                    <button type="submit"
+                        >Follow notifications from this audio</button
+                    >
+                </form>
+            {/if}
+        {/if}
+    {/if}
+
     {#if renderedDescription}
         <h2>Description:</h2>
         <SafeMarkdown source={renderedDescription} />
