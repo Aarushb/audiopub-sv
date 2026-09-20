@@ -253,6 +253,7 @@
         hasNext={!!data.nextAudioId}
         hasPrev={!!data.prevAudioId}
         audioId={data.audio.id}
+        accountAutoplay={data.user?.preferences?.autoplay}
         sources={[
             { src: `/${data.audio.path}`, type: data.mimeType },
             { src: `/${data.audio.transcodedPath}`, type: "audio/aac" },

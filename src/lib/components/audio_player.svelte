@@ -18,6 +18,7 @@
 -->
 <script lang="ts">
     import { createEventDispatcher, onMount } from "svelte";
+    import { saveAccountPreference } from "$lib/preferences";
 
     export let sources: { src: string; type: string }[] = [];
     export let live = false;
@@ -39,6 +40,10 @@
     // When set, playback position for this track is remembered across visits
     // (like YouTube's "continue watching") via localStorage keyed by id.
     export let audioId: string | undefined = undefined;
+    // The logged-in account's saved autoplay preference, if any. Read once
+    // at mount as the source of truth over this device's own localStorage
+    // value — undefined/null (logged out, or never saved) falls back to it.
+    export let accountAutoplay: boolean | null | undefined = undefined;
 
     const dispatch = createEventDispatcher<{
         play: void;
@@ -105,9 +110,14 @@
     let saveInterval: ReturnType<typeof setInterval> | undefined;
 
     onMount(() => {
-        const stored = localStorage.getItem("audiopub_autoplay");
-        if (stored !== null) {
-            autoplayEnabled = stored === "true";
+        if (accountAutoplay !== undefined && accountAutoplay !== null) {
+            autoplayEnabled = accountAutoplay;
+            localStorage.setItem("audiopub_autoplay", String(accountAutoplay));
+        } else {
+            const stored = localStorage.getItem("audiopub_autoplay");
+            if (stored !== null) {
+                autoplayEnabled = stored === "true";
+            }
         }
 
         // Playback is most often left mid-track by navigating away rather
@@ -125,6 +135,7 @@
         const target = e.target as HTMLInputElement;
         autoplayEnabled = target.checked;
         localStorage.setItem("audiopub_autoplay", String(autoplayEnabled));
+        saveAccountPreference({ autoplay: autoplayEnabled });
     }
 
     function togglePlay() {
