@@ -31,6 +31,7 @@
   export let onReply: ((comment: ClientsideComment) => void) = comment => {};
   let isDeletionModalVisible: boolean = false;
   let replyDisabled: boolean = false;
+  let repliesOpen: boolean = false;
 
   $: commentDate = comment
     ? formatRelative(new Date(comment.createdAt), new Date())
@@ -42,6 +43,12 @@
     <a href={`/user/@${encodeURIComponent(comment.user.name)}`}>{comment.user.displayName}</a>
     <span class="comment-date"> - {commentDate}</span>
   </h3>
+  {#if comment.replies && comment.replies.length > 0}
+    <span class="sr-only">
+      {comment.replies.length} {comment.replies.length === 1 ? "reply" : "replies"}.
+      {repliesOpen ? "Replies expanded, press left arrow to collapse." : "Press right arrow to expand."}
+    </span>
+  {/if}
   <SafeMarkdown source={comment.content} />
 
   <div id="comment-actions">
@@ -84,7 +91,7 @@
 </div>
 
 {#if comment.replies && comment.replies.length > 0}
-<details class="replies">
+<details class="replies" bind:open={repliesOpen}>
   <summary>{comment.replies.length} {comment.replies.length === 1 ? "reply" : "replies"}</summary>
   <CommentList comments={comment.replies} {user} {isAdmin} {onReply} label="Replies" isNested />
 </details>
@@ -103,6 +110,18 @@
   .comment:focus-visible {
     outline: 2px solid #007bff;
     outline-offset: 2px;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   .comment h3 a {
