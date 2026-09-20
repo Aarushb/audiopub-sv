@@ -20,6 +20,8 @@ import fs from "fs/promises";
 import { dev } from "$app/environment";
 import type { RequestHandler } from "./$types";
 import { error } from "@sveltejs/kit";
+import Mime from "mime-types";
+import { Audio } from "$lib/server/database";
 
 // WARNING! WARNING! WARNING!
 // This endpoint should never ever ever ever ever be modified to let it be used in production.
@@ -41,10 +43,47 @@ export const GET: RequestHandler = async (event) => {
   const path = `./audio/${id}`;
   try {
     const file = await fs.readFile(path);
+
+    // The transcoded copy carries its own extension (e.g. ".aac"), but the
+    // original upload is stored under its bare id with no extension at all,
+    // so its type has to come from the database record instead. Browsers
+    // won't play media served as application/octet-stream, which this
+    // endpoint used to always send.
+    let contentType = Mime.lookup(id) || undefined;
+    if (!contentType) {
+      const audio = await Audio.findByPk(id);
+      contentType = (audio && Mime.lookup(audio.extension)) || "application/octet-stream";
+    }
+
+    // <audio>/<video> elements probe with a Range request before they'll
+    // start loading; a plain 200 to that probe leaves Chrome's media
+    // pipeline stuck at readyState 0 indefinitely instead of erroring out.
+    const range = event.request.headers.get("range");
+    if (range) {
+      const match = range.match(/^bytes=(\d*)-(\d*)$/);
+      if (match) {
+        const start = match[1] ? parseInt(match[1], 10) : 0;
+        const end = match[2] ? parseInt(match[2], 10) : file.byteLength - 1;
+        if (start < file.byteLength && end < file.byteLength && start <= end) {
+          const chunk = file.subarray(start, end + 1);
+          return new Response(new Uint8Array(chunk), {
+            status: 206,
+            headers: {
+              "Content-Type": contentType,
+              "Content-Length": chunk.byteLength.toString(),
+              "Content-Range": `bytes ${start}-${end}/${file.byteLength}`,
+              "Accept-Ranges": "bytes",
+            },
+          });
+        }
+      }
+    }
+
     return new Response(new Uint8Array(file), {
       headers: {
-        "Content-Type": "application/octet-stream",
+        "Content-Type": contentType,
         "Content-Length": file.byteLength.toString(),
+        "Accept-Ranges": "bytes",
       },
     });
   } catch (e) {
