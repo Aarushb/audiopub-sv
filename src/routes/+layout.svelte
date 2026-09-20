@@ -151,7 +151,6 @@
     <nav>
         <a href="/">Home</a>
         <a href="/quickfeed">Quickfeed</a>
-        <a href="/subscriptions">Subscriptions</a>
         {#if data.user}
             {#if !data.user.isVerified}
                 <p>
@@ -160,6 +159,7 @@
                 </p>
                 <a href="/verify">Verify</a>
             {:else}
+                <a href="/subscriptions">Subscriptions</a>
                 <a href="/notifications" class="notifications-link">
                     Notifications
                     {#if unreadCount > 0}
