@@ -92,7 +92,10 @@
     }
 
     function extractChapterSection(description: string): ChapterSection {
-        const lines = description.split("\n");
+        // Browsers normalize textarea line breaks to CRLF on form submission,
+        // so descriptions saved via the upload form carry \r\n even though
+        // nothing here ever writes \r intentionally.
+        const lines = description.replace(/\r\n/g, "\n").split("\n");
         const start = lines.findIndex((line) =>
             /^#{1,6}\s+chapters\s*$/i.test(line.trim()),
         );
