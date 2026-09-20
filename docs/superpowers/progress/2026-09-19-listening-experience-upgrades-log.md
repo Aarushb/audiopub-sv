@@ -788,3 +788,98 @@ playlist) cleaned up from the dev DB afterward. Committed as two atomic
 commits: `fix: persist home filter and sort selections across bare
 navigations`, `fix: sync autoplay toggle with page state and scope it
 away from previews`.
+
+## 2026-09-20 — Continued sweep: two more real staleness bugs found live
+
+Told to keep sweeping. Re-verified comment posting, replying (with focus
+landing correctly in the textarea and the "Reply to @user:" label),
+threaded nesting, and deletion (via the real confirm-modal flow, not a
+native `confirm()` — confirmed no blocking dialog issue there) end to
+end via real form submissions — all clean. Favorite toggle confirmed both
+directions. The `?` shortcuts modal, `live:` search prefix, and a full
+real playlist-creation flow (registered account, verified/trusted
+directly in the dev DB, uploaded a real file, created a playlist,
+confirmed it renders correctly grouped on the homepage) were also
+re-checked from the previous round and are unaffected by the latest
+commits.
+
+Two more real bugs found through actually clicking through boundary
+conditions rather than assuming the existing code was fine:
+
+- **Prev/Next buttons stayed clickable at the very first/last track**:
+  clicking "Previous track" on the chronologically newest clip (nothing
+  before it) fell through to `window.history.back()` — a jarring,
+  unexplained navigation with zero cue beforehand that there was nothing
+  to go back to. A screen reader user has no way to know a button won't
+  do what its label says until after clicking it. Added `hasNext`/
+  `hasPrev` props to `audio_player.svelte` (default `true`, so callers
+  that don't track boundaries are unaffected) and `disabled` the
+  corresponding button, with matching dimmed styling. The listen page now
+  passes `hasNext={!!data.nextAudioId}` / `hasPrev={!!data.prevAudioId}`.
+  Verified live at the actual newest clip (prev disabled, next enabled),
+  the actual oldest clip (next disabled, prev enabled), a mid-list clip
+  (both enabled), and — since the playlist-aware next/prev logic added
+  earlier this session computes these same two fields — at both ends of
+  a real playlist too, confirming the `?playlist=` context is respected
+  by the disabled state as well as the navigation itself.
+- **Chapter-jump and seek got stuck, and the seek bar/time display froze,
+  after any programmatic seek while paused**: `jumpToNextChapter`,
+  `jumpToPreviousChapter`, and `seek()` all computed the target position
+  from the component's *bound* `currentTime`/`duration` variables rather
+  than the audio element's live values. `bind:currentTime` only resyncs
+  from the `timeupdate` event, which the browser does not fire for a
+  programmatic `.currentTime` assignment while paused — so a second
+  Ctrl+Right press while paused would still compute from the position
+  *before* the first press, landing on the same chapter again instead of
+  advancing. Verified live: before the fix, two Ctrl+Right presses in a
+  row from a fresh load produced `[1, 1]` instead of `[1, 2]`. Fixed the
+  three functions to read `audioElement.currentTime`/`.duration`
+  directly (matching the pattern already used in this session's own
+  `savePlaybackPosition`/`restorePlaybackPosition` for the same reason).
+  Re-verified: `[1, 2]`, correctly advancing.
+
+  Fixing that surfaced a second, worse half of the same bug while
+  checking the result: the actual audio position now advanced correctly,
+  but the *visible* seek bar, the "0:01" time text, and the slider's
+  `aria-valuetext` all stayed frozen at the old value — confirmed live,
+  reading the real DOM after a paused Ctrl+Right: `audio.currentTime`
+  correctly read `1`, but the on-screen time text and `aria-valuetext`
+  still read `0:00`. This is a real, user-facing (and screen-reader-
+  facing) bug: the actual playback position silently diverges from what
+  a user is told the position is, until they press Play and a
+  `timeupdate` finally fires to reconcile them. Root cause is the same
+  `timeupdate`-only resync — fixed by adding a `setPosition(time)` helper
+  that sets `audioElement.currentTime` *and* the reactive `currentTime`
+  variable together, and routing every programmatic seek through it
+  (`seek`, `jumpToPreviousChapter`, `jumpToNextChapter`,
+  `restorePlaybackPosition`, and `onSeekInput`, which already did this
+  correctly by hand and is now just using the shared helper). Re-verified
+  live: after the fix, the same paused Ctrl+Right press correctly showed
+  `"0:01"` in the time text and `"0:01/0:00"` in `aria-valuetext`
+  immediately, no play required. (The seek bar's own visible `value`
+  still reads back as `"0"` in this environment specifically because
+  `duration` never loads at all here — no working audio decode pipeline,
+  confirmed earlier this session — which makes the range input's `max`
+  `"0"` and the browser's own native value-clamping forces it back down;
+  that part isn't fixable from here and isn't this bug, it's the
+  pre-existing, already-documented environment limitation.)
+
+  Also spot-checked whether the same class of bug affects playback speed
+  cycling and mute/volume, since those also read a bound reactive
+  variable — confirmed clean, because `ratechange` and `volumechange`
+  (unlike `timeupdate`) fire reliably for programmatic changes regardless
+  of play state, so `cycleSpeed()` and the mute toggle don't have the
+  staleness problem. Verified live: four speed-button clicks in a row
+  correctly cycled `1× → 1.25× → 1.5× → 2×`, and mute/unmute correctly
+  toggled `audio.muted` and the button's `aria-label` both directions.
+
+### Verification
+
+`npm run check` — 0 errors, 0 warnings, 1041 files, after every change
+in this round. `npm run build` — succeeds. Every fix in this round was
+verified against real, live browser behavior (real DOM reads, real
+keydown dispatches, real boundary data queried from the dev DB first),
+not inferred from reading the code. Committed as three atomic commits:
+`fix: disable prev/next buttons at the start/end of the feed`, `fix: seek
+and chapter-jump from live audio state, not stale bindings`, `fix: sync
+seek bar and time display after programmatic seeks while paused`.
