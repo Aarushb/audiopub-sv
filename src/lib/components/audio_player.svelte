@@ -128,22 +128,27 @@
     }
 
     function seek(seconds: number) {
-        if (!audioElement || !isFinite(duration)) return;
+        if (!audioElement || !isFinite(audioElement.duration)) return;
         audioElement.currentTime = Math.max(
             0,
-            Math.min(duration, currentTime + seconds),
+            Math.min(audioElement.duration, audioElement.currentTime + seconds),
         );
     }
 
+    // These read audioElement.currentTime directly rather than the bound
+    // `currentTime` variable above — that binding only resyncs on the
+    // "timeupdate" event, which doesn't fire for a programmatic seek while
+    // paused, so repeated presses while paused would keep computing from a
+    // stale value and get stuck jumping to the same chapter.
     function jumpToPreviousChapter() {
         if (!audioElement || chapters.length === 0) return;
-        const previous = [...chapters].reverse().find((c) => c.time < currentTime - 1);
+        const previous = [...chapters].reverse().find((c) => c.time < audioElement!.currentTime - 1);
         audioElement.currentTime = previous ? previous.time : 0;
     }
 
     function jumpToNextChapter() {
         if (!audioElement || chapters.length === 0) return;
-        const next = chapters.find((c) => c.time > currentTime + 0.5);
+        const next = chapters.find((c) => c.time > audioElement!.currentTime + 0.5);
         if (next) audioElement.currentTime = next.time;
     }
 
