@@ -22,6 +22,13 @@ import { Op } from "sequelize";
 import type { Actions, PageServerLoad } from "./$types";
 import Subscription from "$lib/server/database/models/subscription";
 import { subscribe, unsubscribe } from "$lib/server/subscriptions";
+import {
+    canBeMuted,
+    canMute,
+    isMuted as isUserMuted,
+    mute,
+    unmute,
+} from "$lib/server/mutes";
 
 async function findUserByProfileParam(param: string) {
     if (param.startsWith("@")) {
@@ -86,7 +93,16 @@ export const load: PageServerLoad = async (event) => {
     if (subscription) isSubscribed = true;
     else isSubscribed = false;
 
+    const isMuted = user ? await isUserMuted(event, profileUser.id) : false;
+    const canBeMutedByUser =
+        !!user &&
+        user.id !== profileUser.id &&
+        canMute(user) &&
+        canBeMuted(profileUser);
+
     return {
+        isMuted,
+        canBeMutedByUser,
         stream: activeStream?.toClientside(false) ?? null,
         audios: clientsideAudios,
         count: audios.count,
@@ -147,5 +163,7 @@ export const actions: Actions = {
         await userToBeTrusted.save();
     },
     subscribe,
-    unsubscribe
+    unsubscribe,
+    mute,
+    unmute,
 };

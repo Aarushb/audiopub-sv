@@ -25,9 +25,31 @@
 </script>
 <h1>Search results for: {data.query}</h1>
 
+{#if data.hasMutes && (data.includeMuted || data.hiddenByMutes > 0)}
+  <p class="mute-notice">
+    {#if data.includeMuted}
+      Showing results from muted users.
+      <a href={`/search?q=${encodeURIComponent(data.query)}`}>Hide them again</a>
+    {:else if data.hiddenByMutes > 0}
+      {data.hiddenByMutes}
+      {data.hiddenByMutes === 1 ? "result is" : "results are"} hidden because you
+      muted the uploader.
+      <a
+        href={`/search?q=${encodeURIComponent(data.query)}&includeMuted=on`}
+        >Include muted users</a
+      >
+    {/if}
+  </p>
+{/if}
+
 <AudioList audios={data.audios} page={data.page} totalPages={0} paginationBaseUrl={`/search`} />
 
 <style>
+  .mute-notice {
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+
   h1 {
     text-align: center;
     margin-bottom: 1rem;

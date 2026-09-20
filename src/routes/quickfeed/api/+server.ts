@@ -21,6 +21,7 @@ import AudioFavorite from "$lib/server/database/models/audio_favorite";
 import type { RequestHandler } from "./$types";
 import { type OrderItem, Sequelize } from "sequelize";
 import { json, error } from "@sveltejs/kit";
+import { excludeMutedUsers, getMutedUserIds } from "$lib/server/mutes";
 
 export const GET: RequestHandler = async ({ url, locals }) => {
     try {
@@ -39,10 +40,13 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         // Use random ordering for TikTok-like experience
         const order: OrderItem[] = [Sequelize.fn('RAND')];
 
+        const mutedUserIds = await getMutedUserIds({ locals });
+
         const audios = await Audio.findAndCountAll({
             limit,
             offset,
             order,
+            where: excludeMutedUsers(mutedUserIds),
             include: {
                 model: User,
                 where: locals.user?.isAdmin ? {} : { isTrusted: true },
