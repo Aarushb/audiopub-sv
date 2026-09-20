@@ -883,3 +883,61 @@ not inferred from reading the code. Committed as three atomic commits:
 `fix: disable prev/next buttons at the start/end of the feed`, `fix: seek
 and chapter-jump from live audio state, not stale bindings`, `fix: sync
 seek bar and time display after programmatic seeks while paused`.
+
+## 2026-09-20 — Final sweep round: admin actions, auth, account flows
+
+Told to keep sweeping until confident nothing else was broken. Granted
+`mutetester1` (the throwaway test account used throughout this session)
+temporary admin rights directly in the dev DB to reach the admin-only
+surface that had never been exercised this session, then reverted it
+afterward.
+
+Verified clean, no new bugs, across: the admin panel (pending approvals /
+recent-edits list), the warn action on a real user, the full edit-audio-
+details flow (save a real change, confirmed via direct DB read), "View
+edit history" → "Revert this edit" (initially looked broken — the marker
+text used in the test edit was still findable in `document.body
+.textContent` after reverting — but tracing it down showed the matches
+were inside a *closed* `<dialog>` correctly preserving the historical
+before/after record, and inside the inert SvelteKit hydration payload
+`<script>`; the actual live, rendered description and parsed chapter list
+were confirmed clean via `Audios.description` in the DB directly and via
+the chapter buttons' rendered text — a real revert, a false alarm from
+checking `body.textContent` too broadly rather than the specific visible
+element, same mistake class as two earlier false alarms this session),
+pin/unpin as announcement (and cross-checked it correctly renders on the
+upload page's preview with the autoplay toggle still correctly hidden,
+confirming an earlier fix from this session), the download link (real
+`HEAD` request, 200, correct content-type), the Share button's graceful
+`.catch()` handling of the browser's "not a real user gesture" rejection
+(expected from a synthetic click, not a bug), stream key reset, playlist
+deletion (used a real throwaway playlist, and got past the native
+`confirm()` block from earlier this session by overriding
+`window.confirm` before triggering it, rather than the real dialog —
+confirmed the row was actually gone from the DB afterward), duplicate-
+username and duplicate-email registration validation, and wrong-password
+login rejection (first attempt looked like it silently failed with no
+error message at all — turned out the test itself put a non-email string
+into a `type="email"` input, which the browser's own native constraint
+validation blocks before the form ever reaches the server; redone with a
+syntactically valid-but-wrong email, the real "Invalid email or password"
+message appeared correctly, and the session was confirmed to have stayed
+as the original account rather than silently switching).
+
+Also noted, but deliberately left alone as pre-existing and not
+regressions: the Share button's clipboard-fallback path uses a blocking
+native `alert("Link copied to clipboard")` rather than a non-blocking
+announcement, and a successful profile update redirects to the homepage
+rather than back to the profile page. Both look like original design
+choices from before this session rather than bugs, and changing either
+would be a UX judgment call beyond what was asked — flagging them here in
+case the user wants either changed on purpose later.
+
+### Verification
+
+`npm run check` — 0 errors, 0 warnings, 1041 files. Working tree clean,
+nothing left to commit — every fix from this round of sweeping had
+already landed in the previous four commits. No code changes this round;
+this entry documents the verification-only pass. Test artifacts (a
+throwaway playlist, a temporary admin grant) cleaned up from the dev DB
+afterward.
