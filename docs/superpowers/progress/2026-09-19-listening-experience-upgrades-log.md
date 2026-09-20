@@ -480,3 +480,70 @@ still present) has not been done yet — that requires the local Docker+dev
 environment to be running, which is the next step before starting the new
 feature work (pagination combobox, collapsible comments, keyboard
 shortcuts).
+
+## 2026-09-20 — Filter panel default-collapse and playlist grouping
+
+Addressed three more issues the user found personally testing:
+
+- **Filter panel forced open**: the homepage's `<details class="filter-section">`
+  had a hardcoded `open` attribute, so "Filter & Sort Options" always
+  rendered expanded regardless of user preference, cluttering the page.
+  Removed the attribute (`src/routes/+page.svelte`). Since this is a plain
+  `<details>` with no client-side open-state binding, every fresh page
+  load (including navigating to a clip and back to the homepage) now
+  starts collapsed by default, while the actual filter/sort *selections*
+  continue to round-trip through the URL query params exactly as before —
+  only the disclosure widget's visual open/closed state changes, not the
+  applied filters. Committed as `fix: collapse filter panel by default on
+  homepage`.
+
+- **Playlists cluttering the feed uncollapsed**: playlists in the
+  homepage, search results, and both profile pages' Playlists tab were
+  rendering as fully-expanded `<article>` cards showing every track
+  inline. Extracted a new shared `src/lib/components/playlist_item.svelte`
+  that renders each playlist as a collapsed `<details>`: the playlist name
+  is a plain-text `<h3>` inside `<summary>` (kept as plain text rather
+  than a nested link, since a link inside `<summary>` creates ambiguous
+  click-target behavior — the whole summary already toggles on click), at
+  the same heading level as individual clip titles so screen-reader users
+  jumping by heading get a consistent, flat list of "things in the feed."
+  Expanding it reveals the byline and the track list, each track rendered
+  as an `<h4>`-headed link nested one level below the playlist's `<h3>`,
+  properly reflecting the parent/child relationship for accessibility
+  purposes. Each track link carries `?playlist={id}` so clicking through
+  still feeds into the playlist-aware next/prev navigation built earlier.
+  An explicit "Open playlist page" link compensates for the heading no
+  longer being a direct link. Replaced the four near-duplicated inline
+  `<article class="playlist-card">` blocks in `+page.svelte`,
+  `search/+page.svelte`, `profile/+page.svelte`, and `user/[id]/+page.svelte`
+  with `<PlaylistItem {playlist} />` (the latter two pass
+  `showOwner={false}` since the byline is redundant on a user's own
+  profile page). Committed as `feat: collapse playlists in feed views
+  behind h3/h4 disclosure`.
+
+- **"N more by [user]" grouping — merge survival check**: the user asked
+  whether upstream's existing "and N more by [user]" collapse-consecutive-
+  uploads feature survived the merge. Confirmed it did: `audio_list.svelte`
+  still has the `groupThreshold` prop (default 3) and the "And {N} more by
+  {displayName}" grouping logic fully intact and wired into every
+  `<AudioList>` call site. This is a separate, pre-existing feature from
+  the new playlist-grouping work above (it groups an individual uploader's
+  consecutive clips, not playlists) and was not touched this round.
+
+### Verification
+
+Live-verified in the browser (not just `npm run check`/`npm run build`,
+both of which passed clean — 1034 files, 0 errors/warnings): navigated to
+the homepage, confirmed the filter panel rendered collapsed and all four
+seeded playlists rendered as collapsed cards, expanded "Nav Test Playlist"
+and confirmed via direct DOM inspection (`document.querySelectorAll`) that
+it renders `open`, its `<h3>` reads "Nav Test Playlist", and its two
+tracks are real `<h4>` elements each linking to
+`/listen/{id}?playlist={playlistId}` — with the other three playlists
+still closed. No console errors from the interaction.
+
+### Still open
+
+The "keep sweeping for other bugs" directive remains active and
+unfinished — continuing to look for regressions beyond the two items
+above.
