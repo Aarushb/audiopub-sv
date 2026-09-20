@@ -24,6 +24,7 @@
     export let autofocus = false;
     export let preload: "none" | "metadata" | "auto" = "metadata";
     export let audioElement: HTMLAudioElement | undefined = undefined;
+    export let chapters: { time: number }[] = [];
 
     const dispatch = createEventDispatcher<{
         play: void;
@@ -76,6 +77,18 @@
         );
     }
 
+    function jumpToPreviousChapter() {
+        if (!audioElement || chapters.length === 0) return;
+        const previous = [...chapters].reverse().find((c) => c.time < currentTime - 1);
+        audioElement.currentTime = previous ? previous.time : 0;
+    }
+
+    function jumpToNextChapter() {
+        if (!audioElement || chapters.length === 0) return;
+        const next = chapters.find((c) => c.time > currentTime + 0.5);
+        if (next) audioElement.currentTime = next.time;
+    }
+
     function onSeekInput(event: Event) {
         if (!audioElement) return;
         const value = Number((event.currentTarget as HTMLInputElement).value);
@@ -115,11 +128,25 @@
     }
 
     function onKeydown(event: KeyboardEvent) {
-        if (event.altKey || event.ctrlKey || event.metaKey) return;
-
         // Don't hijack keys while focus is on an input or textarea
         const target = event.target as HTMLElement;
         if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") return;
+
+        if (event.ctrlKey && !event.altKey && !event.metaKey) {
+            if (event.key === "ArrowLeft") {
+                event.preventDefault();
+                jumpToPreviousChapter();
+                return;
+            }
+            if (event.key === "ArrowRight") {
+                event.preventDefault();
+                jumpToNextChapter();
+                return;
+            }
+            return;
+        }
+
+        if (event.altKey || event.metaKey) return;
 
         switch (event.key) {
             case " ":
