@@ -16,7 +16,7 @@
 </script>
 
 <svelte:head>
-    <title>{`Playlist: `} | audiopub</title>
+    <title>Playlist: {data.playlist.name} | audiopub</title>
 </svelte:head>
 
 <article class="playlist-header">

@@ -14,7 +14,7 @@
 </script>
 
 <svelte:head>
-    <title>{`Search results for: `} | audiopub</title>
+    <title>Search results for: {data.query} | audiopub</title>
 </svelte:head>
 
 <h1>Search results for: {data.query}</h1>

@@ -17,7 +17,7 @@
 </script>
 
 <svelte:head>
-    <title>{`Profile of `} | audiopub</title>
+    <title>Profile of {data.profileUser.displayName} | audiopub</title>
 </svelte:head>
 
 <h1>Profile of {data.profileUser.displayName}</h1>
