@@ -45,6 +45,7 @@
     <AudioList
         audios={data.playlist.audios}
         groupThreshold={0}
+        itemLinkQuery={`?playlist=${data.playlist.id}`}
         paginationBaseUrl={`/playlist/${data.playlist.id}`}
     />
 {:else}

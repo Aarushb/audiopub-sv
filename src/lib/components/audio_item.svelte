@@ -8,6 +8,7 @@
     import SafeMarkdown from "./safe_markdown.svelte";
 
     export let audio: ClientsideAudio;
+    export let linkQuery: string = "";
 
     $: favoritesString = (() => {
         const count = audio.favoriteCount || 0;
@@ -22,7 +23,7 @@
         {#if audio.user && !audio.user.isTrusted}
             <span style="color: red">(Pending review)</span> |{" "}
         {/if}
-        <a href={`/listen/${audio.id}`}>{audio.title}</a>
+        <a href={`/listen/${audio.id}${linkQuery}`}>{audio.title}</a>
         <span class="stats"> | {audio.playsString} | {favoritesString}</span>
     </h3>
     <p>

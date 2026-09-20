@@ -9,6 +9,7 @@
 
     export let audios: ClientsideAudio[];
     export let groupThreshold: number = 3;
+    export let itemLinkQuery: string = "";
 
     export let paginationBaseUrl: string = "/";
     export let page: number = 1;
@@ -101,13 +102,13 @@
                 </h4>
                 {#if expandedGroups.get(item.id)}
                     {#each item.audios as audio (audio.id)}
-                        <AudioItem {audio} />
+                        <AudioItem {audio} linkQuery={itemLinkQuery} />
                     {/each}
                 {/if}
             </div>
         {:else}
             {@const audio = item}
-            <AudioItem {audio} />
+            <AudioItem {audio} linkQuery={itemLinkQuery} />
         {/if}
     {/each}
 </section>

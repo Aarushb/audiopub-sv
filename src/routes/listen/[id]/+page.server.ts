@@ -27,6 +27,7 @@ import {
     StreamChat,
     Subscription,
     AudioEdit,
+    PlaylistAudio,
 } from "$lib/server/database";
 import AudioFavorite from "$lib/server/database/models/audio_favorite";
 import { error, fail, redirect } from "@sveltejs/kit";
@@ -115,12 +116,39 @@ export const load: PageServerLoad = async (event) => {
         : [];
     const userEditCount = edits.filter((edit) => !edit.isAdminEdit).length;
 
-    const nextAudio = await Audio.findOne({
-        where: {
-            createdAt: { [Op.lt]: audio.createdAt },
-        },
-        order: [["createdAt", "DESC"]],
-    });
+    // When arrived at from a playlist (`?playlist=<id>`), next/prev walk that
+    // playlist's own order instead of the site-wide chronological feed, so
+    // N/P and autoplay continue through the playlist the user is actually
+    // browsing rather than jumping to an unrelated track.
+    const playlistId = event.url.searchParams.get("playlist");
+    let nextAudioId: string | null = null;
+    let prevAudioId: string | null = null;
+
+    if (playlistId) {
+        const playlistAudios = await PlaylistAudio.findAll({
+            where: { playlistId },
+            order: [["order", "ASC"]],
+        });
+        const ids = playlistAudios.map((pa) => pa.audioId);
+        const currentIndex = ids.indexOf(audio.id);
+        if (currentIndex !== -1) {
+            nextAudioId = currentIndex < ids.length - 1 ? ids[currentIndex + 1] : null;
+            prevAudioId = currentIndex > 0 ? ids[currentIndex - 1] : null;
+        }
+    } else {
+        const [nextAudio, prevAudio] = await Promise.all([
+            Audio.findOne({
+                where: { createdAt: { [Op.lt]: audio.createdAt } },
+                order: [["createdAt", "DESC"]],
+            }),
+            Audio.findOne({
+                where: { createdAt: { [Op.gt]: audio.createdAt } },
+                order: [["createdAt", "ASC"]],
+            }),
+        ]);
+        nextAudioId = nextAudio ? nextAudio.id : null;
+        prevAudioId = prevAudio ? prevAudio.id : null;
+    }
 
     let isFollowing = false;
     let favoriteCount = 0;
@@ -161,7 +189,8 @@ export const load: PageServerLoad = async (event) => {
         comments: sortedComments.map((c) => c.toClientside(false, true)),
         mimeType: audio.mimeType,
         isFollowing,
-        nextAudioId: nextAudio ? nextAudio.id : null,
+        nextAudioId,
+        prevAudioId,
         archivedStreamId: audio.archivedStreamId,
         archivedStreamChats: audio.archivedStreamId
             ? await StreamChat.findAll({

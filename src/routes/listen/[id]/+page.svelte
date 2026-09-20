@@ -141,20 +141,33 @@
         }
     };
 
+    function navigateToTrack(id: string, autoplay: boolean) {
+        const params = new URLSearchParams();
+        const playlistId = new URLSearchParams(window.location.search).get("playlist");
+        if (playlistId) params.set("playlist", playlistId);
+        if (autoplay) params.set("autoplay", "true");
+        const qs = params.toString();
+        window.location.href = `/listen/${id}${qs ? "?" + qs : ""}`;
+    }
+
     const handleEnded = () => {
         if (autoplayEnabled && data.nextAudioId) {
-            window.location.href = `/listen/${data.nextAudioId}?autoplay=true`;
+            navigateToTrack(data.nextAudioId, true);
         }
     };
 
     const handleNext = () => {
         if (data.nextAudioId) {
-            window.location.href = `/listen/${data.nextAudioId}`;
+            navigateToTrack(data.nextAudioId, false);
         }
     };
 
     const handlePrev = () => {
-        window.history.back();
+        if (data.prevAudioId) {
+            navigateToTrack(data.prevAudioId, false);
+        } else {
+            window.history.back();
+        }
     };
 
     $: favoritesString = (() => {
