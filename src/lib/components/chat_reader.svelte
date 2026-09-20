@@ -18,9 +18,14 @@
 -->
 <script lang="ts">
     import { onMount } from "svelte";
-    import type { ClientsideStreamChat } from "$lib/types";
+    import type { ClientsideChatReaderPreferences, ClientsideStreamChat } from "$lib/types";
+    import { saveAccountPreference } from "$lib/preferences";
 
     export let chat: ClientsideStreamChat | null;
+    // The logged-in account's saved settings, if any — everything except
+    // voiceName, which names a specific OS/browser TTS voice that wouldn't
+    // necessarily exist on another device, so that one always stays local.
+    export let accountPreferences: ClientsideChatReaderPreferences | null | undefined = undefined;
 
     let enabled = false;
     let outputMode: "assertive" | "polite" | "voice" = "polite";
@@ -41,7 +46,28 @@
         return typeof localStorage !== "undefined";
     }
 
+    function loadLocalVoiceName() {
+        if (!hasLocalStorage()) return;
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) voiceName = JSON.parse(saved).voiceName ?? "";
+        } catch {}
+    }
+
     function loadSettings() {
+        // The account's own saved settings win over this device's copy
+        // once logged in, so choices made on one device follow to another
+        // — except voiceName, which always comes from this device.
+        if (accountPreferences) {
+            enabled = accountPreferences.enabled;
+            outputMode = accountPreferences.outputMode;
+            pitch = accountPreferences.pitch;
+            rate = accountPreferences.rate;
+            interrupt = accountPreferences.interrupt;
+            loadLocalVoiceName();
+            return;
+        }
+
         if (!hasLocalStorage()) return;
         try {
             const saved = localStorage.getItem(STORAGE_KEY);
@@ -58,18 +84,22 @@
     }
 
     function saveSettings() {
-        if (!hasLocalStorage()) return;
-        localStorage.setItem(
-            STORAGE_KEY,
-            JSON.stringify({
-                enabled,
-                outputMode,
-                voiceName,
-                pitch,
-                rate,
-                interrupt,
-            }),
-        );
+        if (hasLocalStorage()) {
+            localStorage.setItem(
+                STORAGE_KEY,
+                JSON.stringify({
+                    enabled,
+                    outputMode,
+                    voiceName,
+                    pitch,
+                    rate,
+                    interrupt,
+                }),
+            );
+        }
+        saveAccountPreference({
+            chatReader: { enabled, outputMode, pitch, rate, interrupt },
+        });
     }
 
     function loadVoices() {

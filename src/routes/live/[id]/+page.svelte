@@ -424,7 +424,7 @@
     notice={chatNotice}
 />
 
-<ChatReader chat={latestChat} />
+<ChatReader chat={latestChat} accountPreferences={data.user?.preferences?.chatReader} />
 
 <style>
     h1 {
