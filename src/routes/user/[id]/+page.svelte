@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
     import AudioList from "$lib/components/audio_list.svelte";
+    import PlaylistItem from "$lib/components/playlist_item.svelte";
     import { getTitle } from "$lib/title";
     const title = getTitle();
     import { enhance } from "$app/forms";
@@ -137,12 +138,7 @@
         {#if data.playlists && data.playlists.length > 0}
             <div class="playlists-grid">
                 {#each data.playlists as playlist (playlist.id)}
-                    <article class="playlist-card">
-                        <h3>
-                            <a href={`/playlist/${playlist.id}`}>{playlist.name}</a>
-                        </h3>
-                        <p>{playlist.trackCount ?? playlist.audios?.length ?? 0} tracks</p>
-                    </article>
+                    <PlaylistItem {playlist} showOwner={false} />
                 {/each}
             </div>
         {:else}
@@ -189,24 +185,4 @@
         gap: 1rem;
     }
 
-    .playlist-card {
-        border: 1px solid #ddd;
-        border-radius: 6px;
-        padding: 1rem;
-        background: #fff;
-    }
-
-    .playlist-card h3 {
-        margin: 0 0 0.5rem 0;
-        text-align: left;
-    }
-
-    .playlist-card h3 a {
-        color: #007bff;
-        text-decoration: none;
-    }
-
-    .playlist-card h3 a:hover {
-        text-decoration: underline;
-    }
 </style>
