@@ -60,9 +60,9 @@ export const load: PageServerLoad = async (event) => {
   // How many matches across the whole result set the mutes are keeping out, so
   // the page can say so instead of silently coming up short.
   // count() forwards replacements at runtime, but sequelize's CountOptions type
-  // does not list them, hence the cast.
-  const hiddenByMutes: number = mutesApply
-    ? ((await Audio.count({
+  // does not list them, hence the cast on the options object.
+  const hiddenByMutes = mutesApply
+    ? await Audio.count({
         where: {
           [Op.and]: [matchesQuery, { userId: { [Op.in]: mutedUserIds } }],
         },
@@ -71,7 +71,7 @@ export const load: PageServerLoad = async (event) => {
           model: User,
           where: event.locals.user?.isAdmin ? {} : { isTrusted: true },
         },
-      } as any)) as unknown as number)
+      } as Parameters<typeof Audio.count>[0])
     : 0;
   
   // Query 2: Get favorite data efficiently

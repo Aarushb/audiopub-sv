@@ -48,9 +48,20 @@ export async function getMutedUserIds(
         locals.mutedUserIds = [];
         return locals.mutedUserIds;
     }
+    // Admins are filtered out here rather than only at mute time, so that a
+    // muted user who is later promoted stops being hidden from anyone.
     const mutes = await UserMute.findAll({
         where: { muterId: locals.user!.id },
         attributes: ["mutedId"],
+        include: [
+            {
+                model: User,
+                as: "muted",
+                attributes: [],
+                required: true,
+                where: { isAdmin: false },
+            },
+        ],
     });
     locals.mutedUserIds = mutes.map((mute) => mute.mutedId);
     return locals.mutedUserIds;

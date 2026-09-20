@@ -25,7 +25,7 @@
 </script>
 <h1>Search results for: {data.query}</h1>
 
-{#if data.hasMutes}
+{#if data.hasMutes && (data.includeMuted || data.hiddenByMutes > 0)}
   <p class="mute-notice">
     {#if data.includeMuted}
       Showing results from muted users.
