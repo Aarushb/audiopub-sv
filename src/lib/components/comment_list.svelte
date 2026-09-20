@@ -31,8 +31,13 @@
     return el.closest("li");
   }
 
-  function headingLink(li: HTMLLIElement): HTMLElement | null {
-    return li.querySelector(":scope > .comment h3 a");
+  // Focus lands on the whole comment container (not just the username
+  // link inside its heading) so that a screen reader landing here via the
+  // arrow keys reads the actual comment content, not just "username" —
+  // matches the same tabindex="-1" programmatic-focus-target pattern
+  // audio_player.svelte already uses for its own controls.
+  function commentContainer(li: HTMLLIElement): HTMLElement | null {
+    return li.querySelector(":scope > .comment");
   }
 
   function repliesDetails(li: HTMLLIElement): HTMLDetailsElement | null {
@@ -55,10 +60,17 @@
     if (isNested) return;
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
 
+    // The comment container is where repeat arrow-key navigation lands
+    // (tabindex="-1", so it reads the whole comment when focused) — but
+    // it's deliberately out of the normal Tab order, so the very first
+    // arrow press after tabbing in still has to originate from the
+    // heading link Tab naturally reaches. Both are accepted here; every
+    // move below re-targets the container regardless of which one fired it.
     const target = event.target as HTMLElement;
+    const isCommentContainer = target.matches(".comment");
     const isHeadingLink = target.matches(".comment h3 a");
     const isRepliesSummary = target.matches("details.replies > summary");
-    if (!isHeadingLink && !isRepliesSummary) return;
+    if (!isCommentContainer && !isHeadingLink && !isRepliesSummary) return;
 
     const li = commentLi(target);
     if (!li) return;
@@ -71,7 +83,7 @@
       const sibling = siblings[event.key === "ArrowDown" ? index + 1 : index - 1];
       if (!sibling) return;
       event.preventDefault();
-      headingLink(sibling)?.focus();
+      commentContainer(sibling)?.focus();
       return;
     }
 
@@ -81,7 +93,7 @@
       event.preventDefault();
       details.open = true;
       const firstReplyLi = details.querySelector(":scope > ul.comments-list > li") as HTMLLIElement | null;
-      firstReplyLi && headingLink(firstReplyLi)?.focus();
+      firstReplyLi && commentContainer(firstReplyLi)?.focus();
       return;
     }
 
@@ -93,12 +105,12 @@
       if (!parent) {
         if (wasOpen) {
           event.preventDefault();
-          headingLink(li)?.focus();
+          commentContainer(li)?.focus();
         }
         return;
       }
       event.preventDefault();
-      headingLink(parent)?.focus();
+      commentContainer(parent)?.focus();
     }
   }
 </script>

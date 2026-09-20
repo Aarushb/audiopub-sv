@@ -37,7 +37,7 @@
     : "";
 </script>
 
-<div class="comment">
+<div class="comment" tabindex="-1">
   <h3>
     <a href={`/user/@${encodeURIComponent(comment.user.name)}`}>{comment.user.displayName}</a>
     <span class="comment-date"> - {commentDate}</span>
@@ -97,6 +97,12 @@
     background-color: #fff;
     border: 1px solid #ccc;
     border-radius: 4px;
+    outline: none;
+  }
+
+  .comment:focus-visible {
+    outline: 2px solid #007bff;
+    outline-offset: 2px;
   }
 
   .comment h3 a {
