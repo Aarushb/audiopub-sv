@@ -27,6 +27,7 @@ import {
     StreamChat,
     Subscription,
     AudioEdit,
+    CommentEdit,
     PlaylistAudio,
 } from "$lib/server/database";
 import AudioFavorite from "$lib/server/database/models/audio_favorite";
@@ -49,6 +50,12 @@ import {
     MAX_USER_AUDIO_EDITS,
     updateAudioDetails,
 } from "$lib/server/audio_edits";
+import {
+    CommentEditLimitError,
+    CommentNotFoundError,
+    MAX_USER_COMMENT_EDITS,
+    updateCommentContent,
+} from "$lib/server/comment_edits";
 
 export const load: PageServerLoad = async (event) => {
     const audio = await Audio.findByPk(event.params.id, {
@@ -79,6 +86,24 @@ export const load: PageServerLoad = async (event) => {
             model: User,
         },
     });
+
+    // Fetched separately (like AudioEdit below) rather than as an eager
+    // include, so the comment tree's own query stays simple and this
+    // doesn't multiply rows across the reply hierarchy.
+    const isAdminViewer = viewer?.isAdmin ?? false;
+    const commentEditsByCommentId = new Map<string, CommentEdit[]>();
+    if (comments.length > 0) {
+        const commentEdits = await CommentEdit.findAll({
+            where: { commentId: { [Op.in]: comments.map((c) => c.id) } },
+            include: [{ model: User, as: "editor" }],
+            order: [["createdAt", "DESC"]],
+        });
+        for (const edit of commentEdits) {
+            const list = commentEditsByCommentId.get(edit.commentId) ?? [];
+            list.push(edit);
+            commentEditsByCommentId.set(edit.commentId, list);
+        }
+    }
 
     if (viewer) {
         const relatedCommentIds = comments.map((c) => c.id);
@@ -203,7 +228,9 @@ export const load: PageServerLoad = async (event) => {
         isMuted,
         canBeMutedByUser,
         audio: audio.toClientside(true, favoriteCount, isFavorited),
-        comments: sortedComments.map((c) => c.toClientside(false, true)),
+        comments: sortedComments.map((c) =>
+            c.toClientside(false, true, commentEditsByCommentId, isAdminViewer),
+        ),
         mimeType: audio.mimeType,
         isFollowing,
         nextAudioId,
@@ -453,6 +480,51 @@ export const actions: Actions = {
         // Otherwise we can just delete it
         await comment.destroy();
         return { success: true };
+    },
+    edit_comment: async (event) => {
+        const user = event.locals.user;
+        const form = await event.request.formData();
+        const commentId = form.get("commentId") as string;
+        const content = form.get("content") as string;
+        if (!commentId) {
+            return fail(400);
+        }
+        if (!content || content.length < 3 || content.length > 4000) {
+            return fail(400, {
+                commentId,
+                editCommentMessage: "Comment must be between 3 and 4000 characters",
+            });
+        }
+
+        const comment = await Comment.findByPk(commentId);
+        if (!comment) {
+            return error(404, "Not found");
+        }
+
+        // Same ownership rule as delete: the comment's own author, or an admin.
+        if (!user || (!user.isAdmin && user.id !== comment.userId)) {
+            return error(403, "Forbidden");
+        }
+
+        try {
+            const edit = await updateCommentContent(commentId, user, content);
+            if (!edit) {
+                return fail(400, { commentId, editCommentMessage: "No changes were made" });
+            }
+        } catch (err) {
+            if (err instanceof CommentEditLimitError) {
+                return fail(403, {
+                    commentId,
+                    editCommentMessage: `You have reached the limit of ${MAX_USER_COMMENT_EDITS} edits`,
+                });
+            }
+            if (err instanceof CommentNotFoundError) {
+                return error(404, "Not found");
+            }
+            throw err;
+        }
+
+        return { editCommentSuccess: true, commentId };
     },
     follow: async (event) => {
         const user = event.locals.user;

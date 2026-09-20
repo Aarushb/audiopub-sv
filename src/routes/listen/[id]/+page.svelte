@@ -526,6 +526,7 @@
                 isAdmin={data.isAdmin}
                 user={data.user ?? undefined}
                 {onReply}
+                {form}
             />
         {:else}
             <p>No comments yet</p>

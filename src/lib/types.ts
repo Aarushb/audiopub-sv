@@ -97,6 +97,18 @@ export interface ClientsideComment {
     user: ClientsideUser;
     audio?: ClientsideAudio;
     replies?: ClientsideComment[];
+    editCount?: number;
+    /** Full before/after history — only populated for admin viewers. */
+    edits?: ClientsideCommentEdit[];
+}
+
+export interface ClientsideCommentEdit {
+    id: string;
+    previousContent: string;
+    newContent: string;
+    isAdminEdit: boolean;
+    createdAt: number;
+    editor?: ClientsideUser;
 }
 
 export enum NotificationType {

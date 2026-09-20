@@ -36,6 +36,7 @@ import {
 } from "sequelize-typescript";
 import Audio from "./audio";
 import User from "./user";
+import type CommentEdit from "./comment_edit";
 import type { ClientsideComment, ClientsideAudio } from "$lib/types";
 
 @Table
@@ -83,8 +84,11 @@ export default class Comment extends Model {
   public countReplies!: () => Promise<number>;
   toClientside(
     includeAudio: boolean = false,
-    includeReplies: boolean = false
+    includeReplies: boolean = false,
+    editsByCommentId?: Map<string, CommentEdit[]>,
+    isAdminViewer: boolean = false
   ): ClientsideComment {
+    const edits = editsByCommentId?.get(this.id) ?? [];
     return {
       id: this.id,
       content: this.content,
@@ -93,8 +97,22 @@ export default class Comment extends Model {
       user: this.user!.toClientside(),
       audio: includeAudio ? this.audio?.toClientside() : undefined,
       replies: includeReplies
-        ? this.replies?.map((r) => r.toClientside(includeAudio, includeReplies))
+        ? this.replies?.map((r) =>
+            r.toClientside(includeAudio, includeReplies, editsByCommentId, isAdminViewer)
+          )
         : undefined,
+      editCount: edits.length,
+      edits:
+        isAdminViewer && edits.length > 0
+          ? edits.map((e) => ({
+              id: e.id,
+              previousContent: e.previousContent,
+              newContent: e.newContent,
+              isAdminEdit: e.isAdminEdit,
+              createdAt: e.createdAt.getTime(),
+              editor: e.editor?.toClientside(),
+            }))
+          : undefined,
     };
   }
 

@@ -24,6 +24,7 @@
   export let user: ClientsideUser | undefined = undefined;
   export let isAdmin: boolean = false;
   export let onReply: ((comment: ClientsideComment) => void) = comment => {};
+  export let form: any = undefined;
   export let label: string = "comments";
   export let isNested: boolean = false;
 
@@ -119,7 +120,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <ul class="comments-list" aria-label={label} on:keydown={handleKeydown}>
     {#each comments as comment (comment.id)}
-      <li><Comment {comment} {user} {isAdmin} {onReply} /></li>
+      <li><Comment {comment} {user} {isAdmin} {onReply} {form} /></li>
     {/each}
 </ul>
 {/if}
