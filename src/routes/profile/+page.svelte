@@ -63,6 +63,8 @@
     <button type="submit">Update Profile</button>
 </form>
 
+<p><a href="/mutes">Muted users</a></p>
+
 <section class="stream-key-section">
     <h2>Stream Key</h2>
     <p class="stream-key-display">

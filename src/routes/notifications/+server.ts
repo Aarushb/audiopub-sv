@@ -19,14 +19,26 @@
 import type { RequestHandler } from "./$types";
 import { json } from "@sveltejs/kit";
 import { Notification } from "$lib/server/database";
+import { Op } from "sequelize";
+import { getMutedUserIds } from "$lib/server/mutes";
 
 export const GET: RequestHandler = async ({ locals }) => {
     const user = locals.user;
     if (!user) return json({ unread: 0 });
+    // Keep the badge in step with the list, which hides muted actors.
+    const mutedUserIds = await getMutedUserIds({ locals });
     const unread = await Notification.count({
         where: {
             userId: user.id,
             readAt: null,
+            ...(mutedUserIds.length > 0
+                ? {
+                      [Op.or]: [
+                          { actorId: null },
+                          { actorId: { [Op.notIn]: mutedUserIds } },
+                      ],
+                  }
+                : {}),
         },
     });
     return json({ unread });

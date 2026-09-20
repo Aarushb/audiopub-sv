@@ -11,6 +11,7 @@
     import { enhance } from "$app/forms";
     import SafeMarkdown from "$lib/components/safe_markdown.svelte";
     import SubscribeButton from "$lib/components/subscribe_button.svelte";
+    import MuteButton from "$lib/components/mute_button.svelte";
 
     export let data;
 
@@ -49,7 +50,16 @@
 </table>
 
 {#if data.user && data.user.id != data.profileUser.id}
-    <SubscribeButton isSubscribed={data.isSubscribed} targetUserId={data.profileUser.id}></SubscribeButton>
+    {#if !data.isMuted}
+        <SubscribeButton isSubscribed={data.isSubscribed} targetUserId={data.profileUser.id}></SubscribeButton>
+    {/if}
+    {#if data.canBeMutedByUser}
+        <MuteButton
+            isMuted={data.isMuted}
+            isSubscribed={data.isSubscribed}
+            displayName={data.profileUser.displayName}
+        />
+    {/if}
 {/if}
 
 {#if data.profileUser.bio != ""}

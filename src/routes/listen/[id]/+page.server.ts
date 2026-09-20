@@ -37,6 +37,13 @@ import { json, Op, Sequelize } from "sequelize";
 import { Json } from "sequelize/lib/utils";
 import { subscribe, unsubscribe } from "$lib/server/subscriptions";
 import {
+    canBeMuted,
+    canMute,
+    isMuted as isUserMuted,
+    mute,
+    unmute,
+} from "$lib/server/mutes";
+import {
     AudioEditLimitError,
     AudioNotFoundError,
     MAX_USER_AUDIO_EDITS,
@@ -184,7 +191,17 @@ export const load: PageServerLoad = async (event) => {
         isSubscribed = !!subscription;
     }
 
+    const uploader = audio.user ?? (await User.findByPk(audio.userId));
+    const isMuted = viewer ? await isUserMuted(event, audio.userId) : false;
+    const canBeMutedByUser =
+        !!viewer &&
+        viewer.id !== audio.userId &&
+        canMute(viewer) &&
+        canBeMuted(uploader);
+
     return {
+        isMuted,
+        canBeMutedByUser,
         audio: audio.toClientside(true, favoriteCount, isFavorited),
         comments: sortedComments.map((c) => c.toClientside(false, true)),
         mimeType: audio.mimeType,
@@ -485,4 +502,6 @@ export const actions: Actions = {
     },
     subscribe,
     unsubscribe,
+    mute,
+    unmute,
 };

@@ -32,6 +32,7 @@ import StreamChat from "./models/stream_chat";
 import StreamMute from "./models/stream_mute";
 import Subscription from "./models/subscription";
 import AudioEdit from "./models/audio_edit";
+import UserMute from "./models/user_mute";
 dotenv.config();
 
 if (
@@ -64,6 +65,7 @@ const database = new Sequelize({
         StreamMute,
         Subscription,
         AudioEdit,
+        UserMute,
     ],
     logging: false,
     host: process.env.DATABASE_HOST || "127.0.0.1",
@@ -87,4 +89,5 @@ export {
     StreamMute,
     Subscription,
     AudioEdit,
+    UserMute,
 };

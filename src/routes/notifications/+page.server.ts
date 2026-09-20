@@ -20,6 +20,7 @@
 import type { Actions, PageServerLoad } from "./$types";
 import { Notification } from "$lib/server/database";
 import { Op } from "sequelize";
+import { getMutedUserIds } from "$lib/server/mutes";
 
 export const load: PageServerLoad = async (event) => {
     const user = event.locals.user;
@@ -27,9 +28,24 @@ export const load: PageServerLoad = async (event) => {
         return { notifications: [] };
     }
 
+    const mutedUserIds = await getMutedUserIds(event);
+
     const list = await Notification.findAll({
         where: {
-            [Op.or]: [{ userId: user.id }, { userId: null }],
+            [Op.and]: [
+                { [Op.or]: [{ userId: user.id }, { userId: null }] },
+                // actorId is null on system notifications, which are never muted.
+                ...(mutedUserIds.length > 0
+                    ? [
+                          {
+                              [Op.or]: [
+                                  { actorId: null },
+                                  { actorId: { [Op.notIn]: mutedUserIds } },
+                              ],
+                          },
+                      ]
+                    : []),
+            ],
         },
         order: [["createdAt", "DESC"]],
         limit: 100,

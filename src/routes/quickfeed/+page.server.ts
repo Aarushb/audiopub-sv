@@ -21,6 +21,7 @@ import AudioFavorite from "$lib/server/database/models/audio_favorite";
 import type { Actions, PageServerLoad } from "./$types";
 import { type OrderItem, Sequelize } from "sequelize";
 import { fail, error } from "@sveltejs/kit";
+import { excludeMutedUsers, getMutedUserIds } from "$lib/server/mutes";
 
 export const load: PageServerLoad = async (event) => {
     const pageString = event.url.searchParams.get("page");
@@ -34,10 +35,13 @@ export const load: PageServerLoad = async (event) => {
     // Use random ordering for TikTok-like experience
     const order: OrderItem[] = [Sequelize.fn('RAND')];
 
+    const mutedUserIds = await getMutedUserIds(event);
+
     const audios = await Audio.findAndCountAll({
         limit,
         offset,
         order,
+        where: excludeMutedUsers(mutedUserIds),
         include: {
             model: User,
             where: event.locals.user?.isAdmin ? {} : { isTrusted: true },

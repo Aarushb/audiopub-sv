@@ -20,6 +20,7 @@ import { Audio, User, Playlist, Stream } from "$lib/server/database";
 import AudioFavorite from "$lib/server/database/models/audio_favorite";
 import type { PageServerLoad } from "./$types";
 import { type OrderItem, Sequelize, Op } from "sequelize";
+import { excludeMutedUsers, getMutedUserIds } from "$lib/server/mutes";
 
 export const load: PageServerLoad = async (event) => {
     const pageString = event.url.searchParams.get("page");
@@ -83,7 +84,9 @@ export const load: PageServerLoad = async (event) => {
         order = [[validatedSortField, validatedSortOrder]];
     }
 
-    const audioWhere: any = {};
+    const mutedUserIds = await getMutedUserIds(event);
+
+    const audioWhere: any = { ...excludeMutedUsers(mutedUserIds) };
     if (filterClips && !filterArchives) {
         audioWhere.isLiveArchive = false;
         audioWhere.archivedStreamId = { [Op.is]: null };
@@ -117,6 +120,7 @@ export const load: PageServerLoad = async (event) => {
 
     if (filterPlaylists) {
         playlists = await Playlist.findAndCountAll({
+            where: { ...excludeMutedUsers(mutedUserIds) },
             limit,
             offset,
             order: [["createdAt", "DESC"]],
@@ -173,7 +177,10 @@ export const load: PageServerLoad = async (event) => {
             page === 1
                 ? (
                       await Stream.findAll({
-                          where: { state: "active" },
+                          where: {
+                              state: "active",
+                              ...excludeMutedUsers(mutedUserIds),
+                          },
                           order: [["createdAt", "DESC"]],
                           include: User,
                       })

@@ -24,6 +24,8 @@ declare global {
     interface Locals {
       user?: User | null;
       isFromAi: boolean;
+      /** Cache of the current user's muted user ids, filled lazily by getMutedUserIds. */
+      mutedUserIds?: string[];
     }
   }
 }

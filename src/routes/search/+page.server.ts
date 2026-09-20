@@ -1,6 +1,6 @@
 /*
  * This file is part of the audiopub project.
- * 
+ *
  * Copyright (C) 2024 the-byte-bender
  *
  * This program is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import type { PageServerLoad } from "./$types";
 import { Audio, User, Playlist } from "$lib/server/database";
 import AudioFavorite from "$lib/server/database/models/audio_favorite";
 import { Sequelize, Op } from "sequelize";
+import { getMutedUserIds } from "$lib/server/mutes";
 
 export const load: PageServerLoad = async (event) => {
   let query = event.url.searchParams.get("q") as string;
@@ -32,12 +33,21 @@ export const load: PageServerLoad = async (event) => {
     return error(400, "Query must be at least 2 characters long");
   }
 
+  // Search is deliberate rather than a feed, so muted uploaders are hidden by
+  // default but can be brought back for a single search.
+  const includeMuted = event.url.searchParams.get("includeMuted") === "on";
+  const mutedUserIds = await getMutedUserIds(event);
+  const mutesApply = !includeMuted && mutedUserIds.length > 0;
+
   const lowerQuery = query.toLowerCase();
 
   // Prefix check: playlist:query
   if (lowerQuery.startsWith("playlist:") || lowerQuery.startsWith("playlist ")) {
     const searchTerm = query.replace(/^playlist[:\s]+/i, "").trim();
-    const whereClause = searchTerm ? { name: { [Op.like]: `%${searchTerm}%` } } : {};
+    const baseWhere: any = searchTerm ? { name: { [Op.like]: `%${searchTerm}%` } } : {};
+    const whereClause = mutesApply
+      ? { [Op.and]: [baseWhere, { userId: { [Op.notIn]: mutedUserIds } }] }
+      : baseWhere;
 
     const playlists = await Playlist.findAll({
       where: whereClause,
@@ -47,26 +57,39 @@ export const load: PageServerLoad = async (event) => {
       order: [["createdAt", "DESC"]],
     });
 
+    const hiddenByMutes = mutesApply
+      ? await Playlist.count({
+          where: { [Op.and]: [baseWhere, { userId: { [Op.in]: mutedUserIds } }] },
+        })
+      : 0;
+
     return {
       searchType: "playlist",
       playlists: playlists.map((p) => p.toClientside(true, true)),
       audios: [],
       query,
       page,
+      includeMuted,
+      hiddenByMutes,
+      hasMutes: mutedUserIds.length > 0,
     };
   }
 
   // Prefix check: live:query or archive:query
   if (lowerQuery.startsWith("live:") || lowerQuery.startsWith("live ") || lowerQuery.startsWith("archive:")) {
     const searchTerm = query.replace(/^(live|archive)[:\s]+/i, "").trim();
-    const whereClause: any = { isLiveArchive: true };
+    const baseWhere: any = { isLiveArchive: true };
 
     if (searchTerm) {
-      whereClause[Op.or] = [
+      baseWhere[Op.or] = [
         { title: { [Op.like]: `%${searchTerm}%` } },
         { description: { [Op.like]: `%${searchTerm}%` } },
       ];
     }
+
+    const whereClause = mutesApply
+      ? { [Op.and]: [baseWhere, { userId: { [Op.notIn]: mutedUserIds } }] }
+      : baseWhere;
 
     const audios = await Audio.findAll({
       where: whereClause,
@@ -82,20 +105,38 @@ export const load: PageServerLoad = async (event) => {
       order: [["createdAt", "DESC"]],
     });
 
+    const hiddenByMutes = mutesApply
+      ? await Audio.count({
+          where: { [Op.and]: [baseWhere, { userId: { [Op.in]: mutedUserIds } }] },
+          include: {
+            model: User,
+            where: event.locals.user?.isAdmin ? {} : { isTrusted: true },
+          },
+        } as Parameters<typeof Audio.count>[0])
+      : 0;
+
     return {
       searchType: "live",
       audios: audios.map((audio) => audio.toClientside()),
       playlists: [],
       query,
       page,
+      includeMuted,
+      hiddenByMutes,
+      hasMutes: mutedUserIds.length > 0,
     };
   }
 
   // Standard Audio Search
+  const matchesQuery = Sequelize.literal(
+    `MATCH(title, description) AGAINST(:query IN NATURAL LANGUAGE MODE)`
+  );
+  const audioWhere = mutesApply
+    ? { [Op.and]: [matchesQuery, { userId: { [Op.notIn]: mutedUserIds } }] }
+    : matchesQuery;
+
   const audios = await Audio.findAll({
-    where: Sequelize.literal(
-      `MATCH(title, description) AGAINST(:query IN NATURAL LANGUAGE MODE)`
-    ),
+    where: audioWhere,
     replacements: { query },
     limit: 30,
     offset: (page - 1) * 30,
@@ -107,10 +148,27 @@ export const load: PageServerLoad = async (event) => {
       { model: Playlist },
     ],
   });
-  
+
+  // How many matches across the whole result set the mutes are keeping out, so
+  // the page can say so instead of silently coming up short.
+  // count() forwards replacements at runtime, but sequelize's CountOptions type
+  // does not list them, hence the cast on the options object.
+  const hiddenByMutes = mutesApply
+    ? await Audio.count({
+        where: {
+          [Op.and]: [matchesQuery, { userId: { [Op.in]: mutedUserIds } }],
+        },
+        replacements: { query },
+        include: {
+          model: User,
+          where: event.locals.user?.isAdmin ? {} : { isTrusted: true },
+        },
+      } as Parameters<typeof Audio.count>[0])
+    : 0;
+
   const audioIds = audios.map(audio => audio.id);
   const currentUser = event.locals.user;
-  
+
   let favoriteCounts = new Map<string, number>();
   let userFavorites = new Set<string>();
 
@@ -126,9 +184,9 @@ export const load: PageServerLoad = async (event) => {
           group: ['audioId']
         }),
         currentUser ? AudioFavorite.findAll({
-          where: { 
+          where: {
             userId: currentUser.id,
-            audioId: audioIds 
+            audioId: audioIds
           },
           attributes: ['audioId']
         }) : Promise.resolve([])
@@ -136,7 +194,7 @@ export const load: PageServerLoad = async (event) => {
 
       favoriteCounts = new Map(
         favoriteCountsData.map(item => [
-          item.audioId, 
+          item.audioId,
           parseInt((item as any).get('count')) || 0
         ])
       );
@@ -156,5 +214,8 @@ export const load: PageServerLoad = async (event) => {
     playlists: [],
     query,
     page,
+    includeMuted,
+    hiddenByMutes,
+    hasMutes: mutedUserIds.length > 0,
   };
 };
