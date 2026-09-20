@@ -2,6 +2,31 @@
 
 Spec: `docs/superpowers/specs/2026-09-19-listening-experience-upgrades-design.md`
 
+## 2026-09-20 — Chapter-jump keyboard shortcut (Task 5)
+
+Added a `chapters: { time: number }[] = []` prop to `audio_player.svelte`
+and `jumpToPreviousChapter`/`jumpToNextChapter` helpers, wired to
+`Ctrl+←`/`Ctrl+→` ahead of the existing "bail on any modifier key" guard
+in `onKeydown` (that guard now only applies to Alt/Meta, since Ctrl+arrow
+needs to reach the new branch instead of returning early). Wired the
+listen page's existing `chapters` derived value into the `<AudioPlayer>`
+call; every other caller (`audio_item.svelte`, `quickfeed_player.svelte`)
+is unaffected since the prop defaults to empty.
+
+Verified live despite the environment's lack of real audio decode: the
+`<audio>` element's `currentTime` property can still be set and read even
+at `readyState 0`, but Svelte's `bind:currentTime` only syncs the
+component's *internal* reactive copy from a real `timeupdate` event —
+which never fires without decode — so an initial test looked like the
+jump was "stuck" repeatedly landing on the same chapter. Manually
+dispatching `timeupdate` after each `currentTime` set (simulating what
+real playback does continuously) confirmed the actual behavior is
+correct: successive `Ctrl+→` presses advance 00:00 → 00:01 → 00:02 in
+order. Also confirmed plain `←`/`→` (no Ctrl) are unaffected by the
+`onKeydown` restructuring — they no-op here only because `seek()`'s own
+`isFinite(duration)` guard can never pass without real metadata, which is
+the same environment limitation, not a code issue.
+
 ## 2026-09-20 — Collapsible comment replies + arrow-key navigation (Tasks 3-4)
 
 Wrapped `comment.svelte`'s recursive reply render in a `<details>`
