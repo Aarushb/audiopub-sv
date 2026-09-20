@@ -36,6 +36,17 @@
     let audioElement: HTMLAudioElement | undefined = undefined;
     let showEditDialog = false;
     let showHistoryDialog = false;
+    let statusAnnouncement: HTMLElement | undefined = undefined;
+
+    // The live region has to already exist in the DOM before its content
+    // changes, or screen readers won't treat the change as an announcement
+    // — this is set imperatively after mount rather than via a reactive
+    // {expression}, which would arrive already-populated in the initial SSR
+    // markup and never register as a change at all.
+    function announceStatus(message: string) {
+        if (!statusAnnouncement) return;
+        statusAnnouncement.textContent = message;
+    }
 
     $: if (data.audio) {
         title.set(data.audio.title);
@@ -54,6 +65,14 @@
                     audioElement.play().catch(() => {});
                 }
             }, 100);
+        }
+
+        // A short delay so the live region is registered by the screen
+        // reader before its first content change, so N/P navigation (a full
+        // page load) gets an explicit confirmation rather than relying
+        // solely on the page title being announced.
+        if (data.audio) {
+            setTimeout(() => announceStatus(`Now playing: ${data.audio.title}`), 300);
         }
     });
 
@@ -220,6 +239,8 @@
         This audio is pinned to the top of the upload page as an announcement.
     </p>
 {/if}
+
+<div aria-live="polite" class="sr-only" bind:this={statusAnnouncement}></div>
 
 <div class="audio-player">
     <AudioPlayer
@@ -534,6 +555,18 @@
         text-align: center;
         margin-bottom: 1rem;
         color: #333;
+    }
+
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
     }
 
     .audio-player {
