@@ -1034,3 +1034,52 @@ reconstructed, split commits (not just re-reading the diff) to make sure
 nothing broke in the split. Zero console errors throughout. Test comments,
 the temporary admin grant, and the temporary playlist-membership change
 were all cleaned up from the dev DB afterward.
+
+## 2026-09-20 — Collapsed username menu for account links
+
+Brainstormed as a bounded task (a well-scoped nav change reusing an
+existing pattern already in this codebase) before implementing, per the
+user's request to add a collapsed submenu for account-related links
+analogous to the existing "Create" dropdown.
+
+While investigating the existing nav structure to design this,
+found that **`/subscriptions` was rendered completely outside the
+`{#if data.user}` check** — visible to logged-out visitors, who can't
+usefully do anything with it. Confirmed and documented as its own actual
+bug fix, separate from the new feature: moved the link inside the
+verified-user branch (same place `/notifications` and `/favorites`
+already lived) as its own commit, verified live that a logged-out nav
+now reads just "Home Quickfeed Login Register", before building the
+collapsed-menu feature on top of the corrected baseline.
+
+`src/routes/+layout.svelte`: a second `<details class="create-menu">`
+(reusing the exact same CSS classes as the existing Create dropdown — no
+new visual language) with the summary set to the logged-in user's
+username rather than a generic label, containing Subscriptions,
+Notifications, Favorites, Profile, and Logout. Admin Panel stays a
+separate top-level link outside the dropdown, per explicit instruction.
+Since collapsing the Notifications link behind a closed dropdown would
+otherwise hide the at-a-glance unread-count signal the nav used to give
+for free, the summary itself now shows it too — as "{n} notification" /
+"{n} notifications" rather than a bare number, per explicit correction —
+so a user (or screen reader) doesn't have to expand the menu just to
+learn whether they have anything new.
+
+### Verification
+
+`npm run check` — 0 errors, 0 warnings, 1043 files. `npm run build` —
+succeeds. Live-verified: nav structure and collapsed/default-closed state
+for both dropdowns; inserted a real unread notification directly in the
+dev DB and confirmed the summary read "mutetester1 1 notification" (correct
+singular) and the expanded dropdown's Notifications link still carried
+its own badge too — had to work around the unread-count poller's existing
+`document.visibilityState === "hidden"` guard not firing in this
+automation tab (a pre-existing, correct guard, not a bug) by simulating a
+visibility-change event to trigger the fetch; confirmed the logged-out-nav
+fix; confirmed Admin Panel renders as a separate top-level link, not
+inside the dropdown, for an admin account. Split into two atomic commits
+by reverting to the pre-existing file, applying and committing the bug
+fix in isolation, then reapplying the full feature on top of that fixed
+baseline and re-verifying live again before the second commit — `fix:
+hide Subscriptions nav link when logged out`, `feat: collapse account
+links into a username menu`.
