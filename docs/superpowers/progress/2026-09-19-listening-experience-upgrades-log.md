@@ -941,3 +941,96 @@ already landed in the previous four commits. No code changes this round;
 this entry documents the verification-only pass. Test artifacts (a
 throwaway playlist, a temporary admin grant) cleaned up from the dev DB
 afterward.
+
+## 2026-09-20 — Comment editing + history, and playlist reassignment
+
+Two new features, both explicitly scoped and approved by the user first
+rather than implemented speculatively — asked "are these feasible and
+maintainable" about extending editing to comments (with an audit trail
+for admins) and to playlist membership after upload, and about a live-
+stream question along the way.
+
+**How live-archive marking actually works** (asked, not a code change):
+opt-in per stream via the "Archive this stream when finished" checkbox
+on `/live/new`, not automatic across the board. If checked,
+`src/lib/server/streaming.ts` transcodes the captured audio via ffmpeg
+and creates an `Audio` row with `archivedStreamId` set (which is what
+makes `isLiveArchive` true everywhere downstream) when the stream ends;
+if unchecked, the stream row is just destroyed. The *marking* is fully
+automatic once opted in — there's no separate manual step — but whether
+a stream becomes an archive at all is the streamer's choice at start
+time.
+
+**Live-stream testing**: verified stream creation, the confirm-modal-
+gated "End Stream" flow (correctly destroys an unarchived stream with no
+orphaned row, confirmed via direct DB read), and live chat send — all
+clean. Could not test actual audio streaming into a live source: that
+needs a running Icecast server, and none exists in this environment
+(only MariaDB is dockerized here, and there's no `icecast`/`icecast2`
+binary installed) — the same class of environment gap as the browser's
+missing audio-decode pipeline, not a code bug. Confirmed via reading the
+code that chapters currently don't apply to a live stream at all (the
+live page never passes a `chapters` prop, and there's no way to edit a
+stream's description while live in the first place) — the user's
+response was that this is intentional and chapters should stay archive-
+only, so no work was done there.
+
+**Comment editing + history** (`feat: let comment authors and admins
+edit comments with history`): new `CommentEdit` model + migration
+(`src/lib/server/database/migrations/20260921000001-add-comment-edits.cjs`)
+mirroring the existing `AudioEdit` pattern exactly — purely additive, no
+changes to any existing table. New `src/lib/server/comment_edits.ts`
+helper (`updateCommentContent`, `MAX_USER_COMMENT_EDITS = 3`, same
+transaction-locked read-then-write shape as `audio_edits.ts`). An
+"Edit" button next to Reply/Delete on a comment you own (or any comment,
+if admin — same gate as Delete already uses), inline textarea replacing
+the rendered markdown while editing, `(edited)` tag shown to everyone
+once a comment has any edits, and — admin-only — a collapsed
+`<details>`/`<ol>` directly on the comment (matching the existing
+"N replies" disclosure pattern, not a separate modal, per the request
+to "expand a collapsed div and view a list of old versions") listing
+every previous/new content pair with editor and timestamp, newest first.
+`Comment.toClientside()` gained optional `editsByCommentId`/
+`isAdminViewer` parameters rather than an eager Sequelize include, fetched
+as one separate flat query in the page load (same reasoning as the
+existing `AudioEdit.findAll` — keeps the comment-tree query simple and
+avoids row multiplication across the reply hierarchy) then grouped by id
+in JS.
+
+**Playlist reassignment** (`feat: let clip owners and admins reassign
+playlist membership`): per the user's own answer to a direct question,
+extends the existing "Edit audio details" modal on the listen page with
+a playlist-checkboxes section, rather than a new dedicated page — reuses
+the modal's existing permission/edit-count infrastructure as-is. No
+schema change needed; `PlaylistAudio` already supports arbitrary
+add/remove. Checkboxes are scoped to the *clip owner's* own playlists
+(not the editing admin's), matching the ownership rule already enforced
+at upload time — otherwise an admin editing someone else's clip could
+add it to a playlist that isn't even the owner's. The `edit` action now
+tracks `detailsChanged` and `playlistsChanged` independently, so saving
+a playlist-only change (no title/description edit) no longer incorrectly
+reports "no changes were made."
+
+### Verification
+
+`npm run check` — 0 errors, 0 warnings, 1043 files. `npm run build` —
+succeeds. Ran the new migration locally. Live-verified end to end: posted
+a real comment, edited it, confirmed the `(edited)` tag and the exact new
+content persisted (checked `Audios`/`Comments` tables directly, not just
+the rendered page); edited it two more times and confirmed the 4th edit
+was correctly rejected with the limit message and never saved; as admin,
+expanded the edit-history disclosure and confirmed all 3 edits listed
+with correct before/after pairs in the right order. For playlist
+reassignment: confirmed the pre-checked state matched real
+`PlaylistAudios` rows exactly (caught my own wrong assumption about
+which seed user owned which playlist by checking the DB directly rather
+than guessing), unchecked one, saved, confirmed the row was actually gone
+from `PlaylistAudios` and that both the homepage feed card and the
+playlist's own page reflected the removal, then restored it. Split into
+two atomic commits by temporarily reverting one feature's hunks in the
+two files both features touched, committing the other, then reapplying —
+then re-verified both features live again afterward against the
+reconstructed, split commits (not just re-reading the diff) to make sure
+nothing broke in the split. Zero console errors throughout. Test comments,
+the temporary admin grant, and the temporary playlist-membership change
+were all cleaned up from the dev DB afterward.
