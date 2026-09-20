@@ -251,6 +251,7 @@
         on:next={handleNext}
         on:prev={handlePrev}
         {chapters}
+        audioId={data.audio.id}
         sources={[
             { src: `/${data.audio.path}`, type: data.mimeType },
             { src: `/${data.audio.transcodedPath}`, type: "audio/aac" },

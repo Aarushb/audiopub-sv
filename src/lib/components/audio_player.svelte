@@ -25,6 +25,9 @@
     export let preload: "none" | "metadata" | "auto" = "metadata";
     export let audioElement: HTMLAudioElement | undefined = undefined;
     export let chapters: { time: number }[] = [];
+    // When set, playback position for this track is remembered across visits
+    // (like YouTube's "continue watching") via localStorage keyed by id.
+    export let audioId: string | undefined = undefined;
 
     const dispatch = createEventDispatcher<{
         play: void;
@@ -45,11 +48,51 @@
 
     const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
+    function playbackPositionKey(id: string) {
+        return `audiopub_playback_${id}`;
+    }
+
+    // Don't bother resuming a few seconds from the start, and don't offer a
+    // "resume" that's actually just the tail end of the track.
+    function restorePlaybackPosition() {
+        if (!audioId || !audioElement) return;
+        const saved = localStorage.getItem(playbackPositionKey(audioId));
+        if (!saved) return;
+        const savedTime = parseFloat(saved);
+        if (!isFinite(savedTime) || savedTime < 5) return;
+        const dur = audioElement.duration;
+        if (isFinite(dur) && dur > 0 && savedTime > dur * 0.95) return;
+        audioElement.currentTime = savedTime;
+    }
+
+    function savePlaybackPosition() {
+        if (!audioId || !audioElement) return;
+        const time = audioElement.currentTime;
+        const dur = audioElement.duration;
+        if (time < 5 || (isFinite(dur) && dur > 0 && time > dur * 0.95)) {
+            localStorage.removeItem(playbackPositionKey(audioId));
+            return;
+        }
+        localStorage.setItem(playbackPositionKey(audioId), String(time));
+    }
+
+    let saveInterval: ReturnType<typeof setInterval> | undefined;
+
     onMount(() => {
         const stored = localStorage.getItem("audiopub_autoplay");
         if (stored !== null) {
             autoplayEnabled = stored === "true";
         }
+
+        // Playback is most often left mid-track by navigating away rather
+        // than pausing first, so the position has to be captured on unload
+        // too, not just on the periodic save and the pause handler.
+        const handleBeforeUnload = () => savePlaybackPosition();
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => {
+            window.removeEventListener("beforeunload", handleBeforeUnload);
+            if (saveInterval) clearInterval(saveInterval);
+        };
     });
 
     function toggleAutoplay(e: Event) {
@@ -216,14 +259,24 @@
         on:pause={() => {
             isPlaying = false;
             dispatch("pause");
+            savePlaybackPosition();
         }}
         on:ended={() => {
             isPlaying = false;
             dispatch("ended");
+            if (audioId) localStorage.removeItem(playbackPositionKey(audioId));
+            if (saveInterval) clearInterval(saveInterval);
         }}
         on:waiting={() => (isBuffering = true)}
         on:playing={() => (isBuffering = false)}
         on:canplay={() => (isBuffering = false)}
+        on:loadedmetadata={() => {
+            restorePlaybackPosition();
+            if (!live && audioId) {
+                if (saveInterval) clearInterval(saveInterval);
+                saveInterval = setInterval(savePlaybackPosition, 5000);
+            }
+        }}
     >
         {#each sources as source (source.src)}
             <source src={source.src} type={source.type} />
