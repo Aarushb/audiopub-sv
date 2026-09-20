@@ -2,6 +2,89 @@
 
 Spec: `docs/superpowers/specs/2026-09-19-listening-experience-upgrades-design.md`
 
+## 2026-09-19/20 — Local environment bring-up and merge verification (Task 1)
+
+Brought up the local environment per the spec: `docker compose up -d` for
+MariaDB, `npx sequelize-cli db:migrate` (both pending migrations —
+`add-audio-edits`, `add-audio-announcements` — applied cleanly against
+existing data from prior manual testing), `npm run dev`. Registered two
+fresh test accounts (`testadmin`, promoted to admin/trusted via a direct
+`UPDATE Users` against the Docker container; `testuser2`, left untrusted
+initially to exercise the Trust flow) plus reused an existing `test`
+account/data from an earlier session that was already in the persisted
+Docker volume.
+
+Live-tested and confirmed working: playlist creation (both empty-then-add
+and create-with-clips-preselected), attaching a clip to a playlist during
+upload, the "Part of [Playlist Name]" feed link, profile Playlists tab,
+`playlist:`/`live:` search prefixes, the Clips/Live Archives/Playlists
+filter checkboxes including the "can't uncheck all" rule (verified it
+correctly blocks the last checkbox from being unchecked), threaded
+comments (posted a 3-level-deep thread across both test accounts, useful
+fixture for testing Tasks 3/4 later), comment deletion UI, and the admin
+Trust action (confirmed via direct DB check before/after).
+
+### Bugs found and fixed during this pass (each its own commit)
+
+- **Chapters parser broke on real form submissions.** Browsers normalize
+  `<textarea>` line breaks to CRLF (`\r\n`) when a form is submitted — this
+  is standard, spec'd browser behavior, not something anything here ever
+  writes intentionally. `extractChapterSection`/`parseChapterLines` only
+  split on `\n`, so every chapter line except the last kept a trailing
+  `\r`; since JS regex `.` doesn't match line-terminator characters
+  (including `\r`) without the `s` flag, every chapter line but the last
+  failed to parse and was silently dropped. Confirmed via `HEX()` on the
+  stored description in MariaDB (bytes were `0D0A`, i.e. real `\r\n`, not
+  literal backslash-n text). Fixed by normalizing `\r\n` to `\n` before
+  splitting. This bug existed on `upstream/main` itself, not introduced by
+  our merge.
+- **Local dev audio playback was fully broken**, unrelated to any of this
+  round's feature work. `src/routes/audio/[id]/+server.ts` (the dev-only
+  endpoint noted with a large warning comment against ever modifying it
+  for production use) always served `Content-Type: application/octet-stream`
+  regardless of the file's real type, and never honored `Range` requests
+  (always `200` with the full body, never `206`). Chrome's `<audio>`
+  element requires both a correct content type and working Range/206
+  support to progress past `readyState 0` — confirmed by testing a
+  self-contained `data:` URI, a plain MP3 fetch, and a fully independent
+  minimal Node static server serving the same file, all of which
+  confirmed the browser's media pipeline needs these regardless of which
+  server sends the bytes. Got explicit user sign-off before touching this
+  file given its warning comment; fixed by detecting content type via the
+  `mime-types` package (falling back to a DB lookup of the `Audio` row's
+  stored `extension` for the original upload, which is stored under its
+  bare id with no file extension) and implementing real `206 Partial
+  Content` responses. Left the `if (!dev)` production gate and the warning
+  comment fully intact.
+- **Invalid HTML nesting broke hydration on the listen page.**
+  `SubscribeButton` (whose root element is a `<form>`) was rendered inside
+  a `<p>` in `listen/[id]/+page.svelte`, which is invalid per the HTML
+  spec (`<p>` cannot contain block content) and caused a real
+  `hydration_mismatch` in the console — the browser silently "repairs" the
+  malformed tree during parsing, which can leave client-side event
+  listeners attached to the wrong (or wrong-order) DOM nodes after
+  hydration. This was very likely part of why some buttons on this
+  specific page needed an extra click to register during testing. Fixed
+  by moving `SubscribeButton` to be a sibling of the `<p>` instead of a
+  child, matching how the same component is already used correctly on the
+  user profile page.
+
+### Known limitation of this testing session
+
+The Claude-in-Chrome browser automation tab used for this session's UI
+testing has no functioning audio decode pipeline — confirmed by testing a
+trivial, fully local `data:` URI WAV that never leaves `readyState 0`,
+ruling out the network/server entirely. This means actual audio playback
+(does pressing play start audible/decoded playback, does autoplay's
+"advance to next track" also start playing it, does the new
+`Ctrl+←`/`Ctrl+→` chapter-jump shortcut visibly seek) could not be
+verified from inside this session, even after the Range/content-type
+fixes above. Everything that doesn't require real audio decoding was
+still fully verified (DOM structure, event wiring, keyboard event
+dispatch reaching the right handlers, data flowing correctly to the
+player). A manual playback checklist is owed to the user at the end of
+this work.
+
 ## 2026-09-19 — Branch rename + upstream merge
 
 Renamed `feature/playlists-autoplay-filters` to
