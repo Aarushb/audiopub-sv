@@ -1,5 +1,113 @@
 # Listening Experience Upgrades — Progress Log
 
+## 2026-09-20 — User-reported regressions and bugs (post-handoff)
+
+The user tested manually and reported the previous handoff was incomplete.
+Four issues, investigated and fixed in order:
+
+### 1. Feed cards showed an embedded audio player — design regression
+
+The prior agent's branch had added a full `AudioPlayer` embed to every feed
+card (`audio_item.svelte`), which is not how upstream's own version works
+(confirmed by re-checking `upstream/main`'s actual file, already fetched
+during the merge: it's a plain card — title link, byline, description, no
+player). Per explicit user direction ("upstream takes precedence... the
+audio player should only show up when you go to the clip itself"), restored
+`audio_item.svelte` to upstream's card-only layout (keeping our "Part of
+[Playlist]" line addition), and stripped the now-dead
+`onEnded`/`onNext`/`onPrev`/`itemComponents`/`currentUser` wiring out of
+`audio_list.svelte` and its 6 caller routes. Verified live: feed cards now
+match upstream's layout with no player; the listen page's own player is
+untouched. This also incidentally cleared the one pre-existing
+`audio_item.svelte` `currentUser`-unused-export warning `npm run check`
+had been carrying all session.
+
+### 2. Next/prev track regressed inside playlists
+
+Removing the embedded feed players (above) also removed the *only*
+mechanism that had ever respected playlist order for next/prev — the
+listen page's own `nextAudioId` was (and always had been) purely global
+chronological ("next audio anyone uploaded"), with no playlist awareness,
+and "prev" was literally just `window.history.back()`, never a real
+concept. Fixed by threading playlist context through the URL: playlist
+pages now link to tracks with `?playlist=<id>`; the listen page's
+`load()` computes next/prev from that playlist's own `PlaylistAudio.order`
+when the param is present, falling back to the pre-existing global
+chronological behavior (extended to also support `prevAudioId`, not just
+next, replacing the old browser-back-only fallback) otherwise; and N/P/
+autoplay-continuation preserve the `?playlist=` param across the chain so
+it doesn't drop after the first hop. Verified live: created a 2-track
+playlist, confirmed N/P walk playlist order and stay within it, then
+confirmed plain (no-playlist) N/P still walks the global chronological
+order as before.
+
+### 3. Wrong page title read by screen reader on navigation — severe, sitewide
+
+Root cause was two-fold, both pre-existing (not introduced this session):
+
+- `$lib/title.ts` exported a **module-level** Svelte store. On the server,
+  a module is loaded once and shared by every request in the process —
+  three pages (`+page.svelte`, `favorites/+page.svelte`,
+  `quickfeed/+page.svelte`) called `title.set(...)` unguarded by
+  `onMount`, so their SSR render mutated that shared global, and whichever
+  page rendered last on the server leaked its title into the *next*
+  unrelated request's initial HTML until client hydration corrected it —
+  confirmed via `curl` showing `/favorites`'s title bleeding into an
+  unrelated `/listen/[id]` request right after. This is exactly what the
+  user's screen reader was reading on page load, before "eventually"
+  correcting itself once JS hydrated.
+- Separately, every other page set its title only inside `onMount`, which
+  never runs during SSR at all — so their initial rendered `<title>` was
+  always just the hardcoded default, correct only after hydration.
+
+Fixed properly rather than patched around:
+- `$lib/title.ts` now exports `createTitleStore()`/`getTitle()` built on
+  Svelte's `setContext`/`getContext`, called once in the root layout and
+  read by every page — correctly scoped per request, eliminating the
+  leak by construction (no shared mutable global left at all).
+- Discovered (by direct empirical testing, after an incorrect first theory
+  about `<svelte:head>` source-order) that a `<title>` declared in a
+  layout's `<svelte:head>` always wins over a page's own, regardless of
+  where either is positioned — so no amount of reordering within the
+  layout could ever let a child page's title through. The actually-correct,
+  idiomatic-SvelteKit fix: the layout renders no `<title>` of its own at
+  all; every one of the 23 pages (22 that already had `title.set()` calls,
+  plus `notifications/+page.svelte`, which had never set one at all) now
+  renders its own `<svelte:head><title>{expr} | audiopub</title></svelte:head>`
+  directly, using the same expression each page already had. The
+  unread-notifications-count prefix (inherently client-only anyway, since
+  it depends on a fetch that never resolves during SSR) is now applied via
+  a small reactive `document.title` mutation in the layout post-hydration,
+  instead of through `<svelte:head>`.
+- Verified via `curl`: every page now shows its own correct title from the
+  very first byte of the response, and rapid alternating requests to
+  different pages no longer leak into each other.
+
+### 4. Comment arrow-key navigation only announced the username link
+
+Confirmed this was a real, related instance of the same rich-content-vs-
+single-focus-target problem discussed during design (the one that ruled
+out an ARIA tree). The arrow-key handler was moving focus to each
+comment's heading *link* (`.comment h3 a`), so a screen reader landing
+there only ever announced the link's own accessible name ("username"),
+never the actual comment body. Fixed by making the whole `.comment`
+container focusable (`tabindex="-1"`, matching the exact pattern
+`audio_player.svelte` already uses for its own programmatic-focus root)
+and re-targeting all four navigation directions at that container instead
+of the link — a screen reader landing there now reads the full rendered
+comment (author, timestamp, body). Since `tabindex="-1"` keeps the
+container out of the normal Tab order (by design, so Tab-only keyboard
+users are unaffected), the handler still also accepts the heading link as
+a valid trigger, since that's the real Tab-reachable entry point into a
+thread; every move re-targets the container regardless of which one
+fired it. Verified live via dispatched `KeyboardEvent`s down a 3-level
+thread: each `→`/`←` move now lands on a container whose `textContent`
+includes the full comment, not just the author name.
+
+All four verified with `npm run check` (0 errors throughout) and
+`npm run build` after each fix, plus live browser verification.
+
+
 Spec: `docs/superpowers/specs/2026-09-19-listening-experience-upgrades-design.md`
 
 ## 2026-09-20 — Final regression pass (Task 7)
