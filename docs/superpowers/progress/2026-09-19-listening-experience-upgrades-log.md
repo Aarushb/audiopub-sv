@@ -1083,3 +1083,102 @@ fix in isolation, then reapplying the full feature on top of that fixed
 baseline and re-verifying live again before the second commit — `fix:
 hide Subscriptions nav link when logged out`, `feat: collapse account
 links into a username menu`.
+
+## 2026-09-20 — Account-synced preferences (filters, autoplay, chat reader)
+
+The user asked whether the home-filter cookie survives closing the
+browser entirely, not just staying open in a tab. Verified directly
+against the real `Set-Cookie` response header (`curl -D -`) rather than
+just re-reading the code: `Max-Age=31536000; Path=/; HttpOnly;
+SameSite=Lax` — a genuinely persistent cookie, already correct, already
+would have survived a browser restart. Not a bug.
+
+That raised the follow-up the user actually wanted addressed: everything
+that persists today (this filter cookie, the autoplay toggle, the chat
+reader settings) is device-local — none of it follows a logged-in user to
+a different browser or device. Proposed syncing these to the account,
+initially overstated the maintenance cost of that ("more moving parts")
+before the user correctly pushed back; corrected course by pointing out
+this codebase already has the exact needed precedent
+(`Notification.metadata` as a native `DataType.JSON` column, serialized
+by Sequelize automatically) — so the real cost is one migration, one
+column, and reading/writing that column wherever a setting already
+changes, not a bespoke subsystem.
+
+**Infrastructure** (`feat: add account-synced preferences infrastructure`):
+new `preferences JSON` column on `Users` (migration
+`20260922000001-add-user-preferences.cjs`, nullable, purely additive — no
+existing column touched), exposed through `User.toClientside()` and a new
+`ClientsideUserPreferences` type. New `POST /preferences` endpoint that
+shallow-merges an allowlisted set of top-level keys (`autoplay`,
+`homeFilters`, `chatReader`) into the column rather than trusting the
+whole request body, so an unrecognized key can't silently accumulate
+forever with nothing that ever reads it back. New `src/lib/preferences.ts`
+client helper (`saveAccountPreference`) used by every integration point
+below — a best-effort fire-and-forget POST that silently no-ops for a
+logged-out visitor or a network hiccup, since the device's own copy stays
+authoritative for that device regardless.
+
+**The precedence rule** (the user's explicit ask, addressing the "account
+overrides local" edge case): once logged in, the account's saved value
+wins over whatever's already on the device. For the home-filter cookie,
+this falls out naturally from read order — the load function already
+checks explicit URL params first, then now checks the account, then
+falls back to the cookie — so logging in on a device that had a different
+guest-set cookie value correctly starts showing the account's value on
+the very next visit, no separate reconciliation step needed. For autoplay
+and chat reader (read purely client-side, synchronously available from
+the SSR'd `data.user.preferences` at component init) the same rule is
+applied explicitly at mount: if an account value is present, it
+overwrites localStorage immediately and becomes the active value;
+otherwise localStorage is used exactly as before.
+
+**Three integrations**, each its own commit:
+- `feat: sync home filter/sort preference to the account when logged in`
+  — `+page.server.ts`'s existing cookie-based fallback chain gained the
+  account as the higher-precedence layer above it.
+- `feat: sync autoplay preference to the account when logged in` —
+  `audio_player.svelte` gained an `accountAutoplay` prop (mirrors the
+  existing `hasNext`/`hasPrev`/`audioId` prop style already on this
+  component), wired from `data.user?.preferences?.autoplay` on the listen
+  page (the only usage where the toggle is both interactive and
+  consequential — the upload preview and the live player don't need it).
+- `feat: sync chat reader settings to the account, keeping voice choice
+  local` — `chat_reader.svelte` gained an `accountPreferences` prop
+  covering everything except `voiceName`, which names a specific
+  OS/browser TTS voice that wouldn't necessarily exist on a different
+  device — that one field always stays local even when the rest syncs.
+
+### Verification
+
+`npm run check` — 0 errors, 0 warnings, 1046 files, after every commit
+in this round. `npm run build` — succeeds. For each of the three,
+verified the actual cross-device scenario rather than just the same-tab
+round trip: for filters, logged in via a completely separate `curl`
+session carrying only a fresh auth cookie (no filter cookie at all) and
+confirmed the rendered checkboxes/sort-select matched the account's saved
+values exactly, not the defaults. Hit one genuine red herring while doing
+this — a stale `location.reload()` from earlier testing had silently
+re-saved old filter values to the account between two of the checks,
+which looked like a shallow-merge bug until isolating it with a clean,
+controlled DB reset immediately followed by a single preference write
+confirmed the merge itself was correct all along and the confusion was
+just leftover state from overlapping test sessions. For autoplay, toggled
+via a real click and confirmed the exact new value landed in
+`Users.preferences` without disturbing the sibling `homeFilters` key
+already there. For chat reader, confirmed settings only save on
+component teardown (matching this component's pre-existing, unchanged
+save timing) by using a real in-app link click to trigger proper
+SvelteKit client-side routing and Svelte's `onDestroy` — an initial
+attempt using a hard full-page navigation correctly did *not* trigger the
+save, which is consistent with how this component already behaved before
+today, not a new gap introduced by this work. All test streams, accounts'
+`preferences` columns, and stray DB rows created during testing were
+cleaned up afterward.
+
+Explicitly out of scope for this round, flagged by the user as a good
+follow-up question to come back to: per-track playback resume position
+(`audiopub_playback_{id}` in `audio_player.svelte`) is architecturally a
+different kind of data — one row per track ever played rather than a
+fixed preferences blob — and deserves its own design discussion rather
+than being folded into this JSON column.
