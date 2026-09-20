@@ -2,6 +2,39 @@
 
 Spec: `docs/superpowers/specs/2026-09-19-listening-experience-upgrades-design.md`
 
+## 2026-09-20 — Final regression pass (Task 7)
+
+`npm run check` and `npm run build` both pass clean (0 errors; the one
+pre-existing `audio_item.svelte` `currentUser` unused-export warning
+remains, unrelated to this work). Spot-checked `/quickfeed`, `/favorites`,
+`/admin`, `/profile`, and `/profile?tab=playlists` for console errors
+after all six feature/fix commits — none found.
+
+### What shipped
+
+Merge-forward from `upstream/main` plus three bugs found and fixed along
+the way (chapters CRLF parsing, dev audio endpoint content-type/range
+support, invalid `<p>`-wraps-`<form>` HTML nesting), then four new
+features: the pagination page-jump combobox, collapsed-by-default comment
+replies with arrow-key navigation, a `Ctrl+←`/`Ctrl+→` chapter-jump
+shortcut, and a global `?` keyboard-shortcuts help modal. All committed
+as atomic, single-line Conventional Commits on
+`feature/listening-experience-upgrades`.
+
+### Explicitly deferred to the user
+
+Real audio playback (does Play actually start audible playback, does
+autoplay both advance *and* play the next track, does the chapter list's
+click-to-seek work) could not be verified from inside this session — the
+browser automation tab used throughout has no functioning audio decode
+pipeline at all (confirmed with a trivial local `data:` URI that never
+progresses past `readyState 0`, ruling out the network/server). Everything
+that doesn't require real decoding was verified directly (DOM structure,
+keyboard event dispatch reaching the correct handlers, `currentTime`
+advancing correctly through chapters once `timeupdate` fires, as it
+would during real playback). A short manual checklist covering just the
+playback-dependent items is owed to the user to close this out.
+
 ## 2026-09-20 — Global keyboard shortcuts help modal (Task 6)
 
 Created `keyboard_shortcuts_modal.svelte`, reusing the existing native
