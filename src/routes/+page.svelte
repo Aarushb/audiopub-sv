@@ -75,7 +75,7 @@
     {/each}
 {/if}
 
-<details class="filter-section" open>
+<details class="filter-section">
     <summary class="filter-summary">
         <h2>Filter & Sort Options</h2>
     </summary>
