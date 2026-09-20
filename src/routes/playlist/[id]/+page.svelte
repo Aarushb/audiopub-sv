@@ -45,7 +45,6 @@
     <AudioList
         audios={data.playlist.audios}
         groupThreshold={0}
-        currentUser={data.user}
         paginationBaseUrl={`/playlist/${data.playlist.id}`}
     />
 {:else}

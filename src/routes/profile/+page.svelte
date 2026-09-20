@@ -116,7 +116,6 @@
             page={data.page}
             totalPages={data.totalPages}
             paginationBaseUrl="/profile?tab=clips"
-            currentUser={data.profileUser}
         />
     {:else if data.tab === "archives"}
         <AudioList
@@ -125,7 +124,6 @@
             page={data.page}
             totalPages={data.totalPages}
             paginationBaseUrl="/profile?tab=archives"
-            currentUser={data.profileUser}
         />
     {:else if data.tab === "playlists"}
         {#if data.playlists && data.playlists.length > 0}

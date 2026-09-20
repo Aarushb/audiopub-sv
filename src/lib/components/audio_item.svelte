@@ -1,30 +1,13 @@
 <!--
   This file is part of the audiopub project.
-  
+
   Copyright (C) 2025 the-byte-bender
 -->
 <script lang="ts">
-    import type { ClientsideAudio, ClientsideUser } from "$lib/types";
+    import type { ClientsideAudio } from "$lib/types";
     import SafeMarkdown from "./safe_markdown.svelte";
-    import AudioPlayer from "./audio_player.svelte";
 
     export let audio: ClientsideAudio;
-    export let currentUser: ClientsideUser | null = null;
-    export let onEnded: (() => void) | undefined = undefined;
-    export let onNext: (() => void) | undefined = undefined;
-    export let onPrev: (() => void) | undefined = undefined;
-
-    let playerComponent: AudioPlayer | undefined = undefined;
-
-    export function playAudio() {
-        if (playerComponent && playerComponent.audioElement) {
-            playerComponent.audioElement.play().catch(() => {});
-        }
-    }
-
-    const handlePlay = () => {
-        fetch(`/listen/${audio.id}/try_register_play`, { method: "POST" }).catch(() => {});
-    };
 
     $: favoritesString = (() => {
         const count = audio.favoriteCount || 0;
@@ -42,21 +25,6 @@
         <a href={`/listen/${audio.id}`}>{audio.title}</a>
         <span class="stats"> | {audio.playsString} | {favoritesString}</span>
     </h3>
-
-    <div class="item-player-container">
-        <AudioPlayer
-            bind:this={playerComponent}
-            sources={[
-                { src: `/${audio.path}`, type: "audio/aac" },
-                { src: `/${audio.transcodedPath}`, type: "audio/aac" }
-            ]}
-            on:play={handlePlay}
-            on:ended={() => onEnded && onEnded()}
-            on:next={() => onNext && onNext()}
-            on:prev={() => onPrev && onPrev()}
-        />
-    </div>
-
     <p>
         {#if audio.playlists && audio.playlists.length > 0}
             <span class="playlist-info">
@@ -77,9 +45,7 @@
     .audio-item {
         margin-bottom: 20px;
         border: 1px solid #ccc;
-        padding: 12px;
-        border-radius: 6px;
-        background: #fff;
+        padding: 10px;
     }
 
     h3 {
@@ -92,10 +58,6 @@
         font-weight: normal;
         margin-left: 0.5em;
         white-space: nowrap;
-    }
-
-    .item-player-container {
-        margin: 8px 0;
     }
 
     .playlist-info a {

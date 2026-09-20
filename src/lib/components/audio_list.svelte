@@ -4,53 +4,15 @@
   Copyright (C) 2025 the-byte-bender
 -->
 <script lang="ts">
-    import type { ClientsideAudio, ClientsideUser } from "$lib/types";
+    import type { ClientsideAudio } from "$lib/types";
     import AudioItem from "./audio_item.svelte";
-    import { onMount } from "svelte";
 
     export let audios: ClientsideAudio[];
     export let groupThreshold: number = 3;
-    export let currentUser: ClientsideUser | null = null;
 
     export let paginationBaseUrl: string = "/";
     export let page: number = 1;
     export let totalPages: number = 0;
-
-    let itemComponents: Record<string, AudioItem> = {};
-
-    function isAutoplayEnabled() {
-        const stored = localStorage.getItem("audiopub_autoplay");
-        return stored !== "false";
-    }
-
-    function handleTrackEnded(currentIndex: number) {
-        if (!isAutoplayEnabled() || !audios || currentIndex >= audios.length - 1) {
-            return;
-        }
-        handleNextTrack(currentIndex);
-    }
-
-    function handleNextTrack(currentIndex: number) {
-        if (!audios || currentIndex >= audios.length - 1) return;
-        const nextAudio = audios[currentIndex + 1];
-        if (nextAudio) {
-            const nextComp = itemComponents[nextAudio.id];
-            if (nextComp) {
-                nextComp.playAudio();
-            }
-        }
-    }
-
-    function handlePrevTrack(currentIndex: number) {
-        if (!audios || currentIndex <= 0) return;
-        const prevAudio = audios[currentIndex - 1];
-        if (prevAudio) {
-            const prevComp = itemComponents[prevAudio.id];
-            if (prevComp) {
-                prevComp.playAudio();
-            }
-        }
-    }
 
     type AudioGroup = {
         isGroup: true;
@@ -139,27 +101,13 @@
                 </h4>
                 {#if expandedGroups.get(item.id)}
                     {#each item.audios as audio (audio.id)}
-                        <AudioItem
-                            bind:this={itemComponents[audio.id]}
-                            {audio}
-                            {currentUser}
-                            onEnded={() => handleTrackEnded(audios.findIndex((a) => a.id === audio.id))}
-                            onNext={() => handleNextTrack(audios.findIndex((a) => a.id === audio.id))}
-                            onPrev={() => handlePrevTrack(audios.findIndex((a) => a.id === audio.id))}
-                        />
+                        <AudioItem {audio} />
                     {/each}
                 {/if}
             </div>
         {:else}
             {@const audio = item}
-            <AudioItem
-                bind:this={itemComponents[audio.id]}
-                {audio}
-                {currentUser}
-                onEnded={() => handleTrackEnded(audios.findIndex((a) => a.id === audio.id))}
-                onNext={() => handleNextTrack(audios.findIndex((a) => a.id === audio.id))}
-                onPrev={() => handlePrevTrack(audios.findIndex((a) => a.id === audio.id))}
-            />
+            <AudioItem {audio} />
         {/if}
     {/each}
 </section>

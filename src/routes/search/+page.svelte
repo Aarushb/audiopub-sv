@@ -37,13 +37,13 @@
 {:else if data.searchType === "live"}
   <h2>Live Archive Results</h2>
   {#if data.audios && data.audios.length > 0}
-    <AudioList audios={data.audios} currentUser={data.user} page={data.page} totalPages={0} paginationBaseUrl={`/search?q=${encodeURIComponent(data.query)}`} />
+    <AudioList audios={data.audios} page={data.page} totalPages={0} paginationBaseUrl={`/search?q=${encodeURIComponent(data.query)}`} />
   {:else}
     <p>No live archives found matching "{data.query}".</p>
   {/if}
 {:else}
   {#if data.audios && data.audios.length > 0}
-    <AudioList audios={data.audios} currentUser={data.user} page={data.page} totalPages={0} paginationBaseUrl={`/search?q=${encodeURIComponent(data.query)}`} />
+    <AudioList audios={data.audios} page={data.page} totalPages={0} paginationBaseUrl={`/search?q=${encodeURIComponent(data.query)}`} />
   {:else}
     <p>No audio results found matching "{data.query}".</p>
   {/if}

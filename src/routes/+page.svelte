@@ -170,7 +170,6 @@
         audios={data.audios}
         page={data.page}
         totalPages={data.totalPages}
-        currentUser={data.user}
         paginationBaseUrl={paginationBaseUrl}
     />
 {:else if (!data.playlists || data.playlists.length === 0)}
