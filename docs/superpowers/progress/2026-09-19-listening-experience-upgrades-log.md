@@ -1,5 +1,66 @@
 # Listening Experience Upgrades — Progress Log
 
+## 2026-09-20 — Continued regression sweep after the previous round of fixes
+
+Dev server was killed (accidentally, per the user, likely an environment
+hiccup — not something either side did deliberately) and restarted cleanly
+on port 5173 after clearing a stale orphaned `node.exe` still holding the
+port. Session persisted fine (JWT cookie is DB-backed, unaffected by a
+server restart).
+
+Continued the "play around and find regressions" sweep the user asked
+for, this time systematically re-testing everything touched by the prior
+round's fixes plus previously-unverified actions:
+
+- **Favorite/unfavorite** on the listen page: confirmed both directions
+  toggle correctly.
+- **Audio editing** (`canEdit`/`edit`/`revertEdit`, restored during the
+  original merge but never live-tested until now): submitted a real title
+  edit, confirmed the `[edited]` tag appears and "View edit history" shows
+  it.
+- **Announcement pin/unpin**: confirmed the `[announcement]` tag toggles
+  on the listen page, and that upstream's own design *does* embed a
+  dedicated `AudioPlayer` for pinned announcements on the upload page
+  specifically (checked upstream's real file to confirm this is
+  intentional, not the same "no player in feeds" issue fixed earlier — it
+  only applies to this one special-cased announcement callout).
+- **Subscribe/unsubscribe** (as testuser2, on testadmin): confirmed via
+  the listen page's SubscribeButton, and confirmed no hydration-mismatch
+  console errors reappeared (verifying the earlier `<p>`-nesting fix
+  holds).
+- **Comment deletion**: posted a comment as testuser2, deleted it through
+  the real UI (delete button → confirmation modal → confirm), verified it
+  was actually removed from the database, not just hidden client-side.
+- **Admin warn action**: submitted a real warning against testuser2,
+  confirmed the correct email content was logged to the dev server
+  console (`NO_EMAIL=true` path).
+- Structural diff-checked `listen`, `upload`, `profile`, and `user/[id]`
+  pages' forms/buttons/actions against upstream's real files to catch any
+  other silently-dropped pieces from the merge before they surface as
+  more bug reports.
+
+### Bugs found during this sweep
+
+- **Follow/unfollow-notifications button was completely missing** from
+  the listen page template — a genuine regression from the original merge
+  reconciliation (not something touched by the more recent fixes). The
+  server-side `isFollowing` data and `follow`/`unfollow` actions were
+  still fully intact; only the template markup rendering the button had
+  been dropped. Restored verbatim from upstream's structure, verified the
+  full follow → unfollow round-trip live.
+- **Three page titles were silently broken** (`user/[id]`, `playlist/[id]`,
+  `search`) — self-inflicted, from the batch shell script used to insert
+  `<svelte:head>` blocks across 21 files in the previous round: the
+  double-quoted template-string arguments (`` `Profile of ${...}` `` etc.)
+  got mangled by shell interpretation before reaching `perl`, silently
+  truncating to just the literal prefix and losing the interpolated part
+  entirely (e.g. `Profile of ${data.profileUser.displayName}` became just
+  `Profile of `). Caught by noticing an empty-looking browser tab title
+  while testing an unrelated admin action, then confirmed via `curl`
+  against raw SSR output. Fixed directly, then did a full manual review
+  of all 23 pages' `<title>` expressions (not just the 3 broken ones) to
+  rule out further shell-escaping casualties — none found.
+
 ## 2026-09-20 — User-reported regressions and bugs (post-handoff)
 
 The user tested manually and reported the previous handoff was incomplete.
