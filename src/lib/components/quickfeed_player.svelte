@@ -22,7 +22,8 @@
     import CommentList from "./comment_list.svelte";
     import { onMount, onDestroy } from "svelte";
     import { enhance } from "$app/forms";
-    import title from "$lib/title";
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
 
     export let audios: ClientsideAudio[];
     export let currentUser: ClientsideUser | null = null;

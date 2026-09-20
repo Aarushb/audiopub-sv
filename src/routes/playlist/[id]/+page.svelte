@@ -6,14 +6,18 @@
 <script lang="ts">
     import { enhance } from "$app/forms";
     import AudioList from "$lib/components/audio_list.svelte";
-    import title from "$lib/title";
-    import { onMount } from "svelte";
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
     import type { PageData } from "./$types";
 
     export let data: PageData;
 
-    onMount(() => title.set(`Playlist: ${data.playlist.name}`));
+    $: title.set(`Playlist: ${data.playlist.name}`);
 </script>
+
+<svelte:head>
+    <title>{`Playlist: `} | audiopub</title>
+</svelte:head>
 
 <article class="playlist-header">
     <h1>{data.playlist.name}</h1>

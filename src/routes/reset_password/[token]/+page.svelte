@@ -18,14 +18,18 @@
 -->
 <script lang="ts">
     import { enhance } from "$app/forms";
-    import title from "$lib/title";
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
     import type { ActionData } from "./$types";
-    import { onMount } from "svelte";
-    onMount(() => title.set("Reset Password"));
+    $: title.set("Reset Password");
     export let data;
 
     export let form: ActionData;
 </script>
+
+<svelte:head>
+    <title>{"Reset Password"} | audiopub</title>
+</svelte:head>
 
 <h1>Reset your password</h1>
 

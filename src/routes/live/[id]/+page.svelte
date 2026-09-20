@@ -27,14 +27,15 @@
     import Modal from "$lib/components/modal.svelte";
     import { fade, slide } from "svelte/transition";
     import { enhance } from "$app/forms";
-    import title from "$lib/title";
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
     import { streamListenUrl } from "$lib/streaming_config";
     import type {
         ClientsideStreamChat,
         ClientsideStreamMute,
     } from "$lib/types";
 
-    onMount(() => title.set(data.stream.title));
+    $: title.set(data.stream.title);
 
     $: isOwnerOrAdmin =
         data.user && (data.user.id === data.stream.user?.id || data.isAdmin);
@@ -277,6 +278,10 @@
         };
     });
 </script>
+
+<svelte:head>
+    <title>{data.stream.title} | audiopub</title>
+</svelte:head>
 
 <h1>{data.stream.title}</h1>
 

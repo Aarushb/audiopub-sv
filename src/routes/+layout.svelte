@@ -5,7 +5,7 @@
 -->
 <script lang="ts">
     import { enhance } from "$app/forms";
-    import title from "$lib/title";
+    import { createTitleStore } from "$lib/title";
     import { onDestroy, onMount } from "svelte";
     import { browser } from "$app/environment";
     import OneSignal from "react-onesignal";
@@ -15,6 +15,19 @@
     const PUBLIC_ONE_SIGNAL_APP_ID = (envPublic as any).PUBLIC_ONE_SIGNAL_APP_ID;
 
     export let data: LayoutData;
+
+    const title = createTitleStore();
+
+    // Each page renders its own <svelte:head><title> for correct SSR output
+    // (a <title> declared here in the layout would always win over a page's
+    // own, regardless of source order, leaving every page with this same
+    // generic title until hydration). The unread-count prefix is inherently
+    // client-only anyway, since it depends on a fetch that never runs
+    // during SSR, so it's applied as a plain DOM mutation once mounted
+    // instead of through <svelte:head>.
+    $: if (browser) {
+        document.title = `${unreadCount > 0 ? `(${unreadCount}) ` : ""}${$title} | audiopub`;
+    }
 
     let shortcutsModalVisible = false;
 
@@ -133,12 +146,6 @@
         }
     }
 </script>
-
-<svelte:head>
-    <title
-        >{unreadCount > 0 ? `(${unreadCount}) ` : ""}{$title} | audiopub</title
-    >
-</svelte:head>
 
 <header>
     <nav>

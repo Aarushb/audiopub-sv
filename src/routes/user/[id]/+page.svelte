@@ -5,16 +5,20 @@
 -->
 <script lang="ts">
     import AudioList from "$lib/components/audio_list.svelte";
-    import title from "$lib/title";
-    import { onMount } from "svelte";
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
     import { enhance } from "$app/forms";
     import SafeMarkdown from "$lib/components/safe_markdown.svelte";
     import SubscribeButton from "$lib/components/subscribe_button.svelte";
 
     export let data;
 
-    onMount(() => title.set(`Profile of ${data.profileUser.displayName}`));
+    $: title.set(`Profile of ${data.profileUser.displayName}`);
 </script>
+
+<svelte:head>
+    <title>{`Profile of `} | audiopub</title>
+</svelte:head>
 
 <h1>Profile of {data.profileUser.displayName}</h1>
 

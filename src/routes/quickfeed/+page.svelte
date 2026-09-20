@@ -17,7 +17,8 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
-    import title from "$lib/title";
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
     import QuickfeedPlayer from "$lib/components/quickfeed_player.svelte";
     import { beforeNavigate, afterNavigate } from "$app/navigation";
     import type { PageData } from "./$types";
@@ -46,6 +47,10 @@
         }
     });
 </script>
+
+<svelte:head>
+    <title>{"Quickfeed"} | audiopub</title>
+</svelte:head>
 
 <QuickfeedPlayer bind:this={quickfeedPlayerRef} audios={data.audios} currentUser={data.user} />
 

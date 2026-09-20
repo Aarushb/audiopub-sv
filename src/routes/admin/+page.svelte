@@ -18,8 +18,8 @@
 -->
 <script lang="ts">
     import { enhance } from "$app/forms";
-    import title from "$lib/title.js";
-    import { onMount } from "svelte";
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
     import Modal from "$lib/components/modal.svelte";
 
     export let data;
@@ -31,8 +31,12 @@
         showEditDialog = true;
     }
 
-    onMount(() => title.set("Admin"));
+    $: title.set("Admin");
 </script>
+
+<svelte:head>
+    <title>{"Admin"} | audiopub</title>
+</svelte:head>
 
 <h1>Pending Account Approvals</h1>
 

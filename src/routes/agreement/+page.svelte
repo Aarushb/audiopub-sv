@@ -17,10 +17,14 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script>
-    import title from "$lib/title";
-    import { onMount } from "svelte";
-    onMount(() => title.set("Agreement"));
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
+    $: title.set("Agreement");
 </script>
+
+<svelte:head>
+    <title>{"Agreement"} | audiopub</title>
+</svelte:head>
 
 <h1>The Core Philosophy</h1>
 <ul>

@@ -5,16 +5,20 @@
 -->
 <script lang="ts">
     import { enhance } from "$app/forms";
-    import title from "$lib/title";
-    import { onMount } from "svelte";
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
     import type { PageData, ActionData } from "./$types";
 
     export let data: PageData;
     export let form: ActionData;
 
-    onMount(() => title.set("Make Playlist"));
+    $: title.set("Make Playlist");
     let submitting = false;
 </script>
+
+<svelte:head>
+    <title>{"Make Playlist"} | audiopub</title>
+</svelte:head>
 
 <h1>Make Playlist</h1>
 

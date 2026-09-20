@@ -7,14 +7,18 @@
     import { enhance } from "$app/forms";
     import type { PageData, ActionData } from "./$types";
     import AudioList from "$lib/components/audio_list.svelte";
-    import title from "$lib/title";
-    import { onMount } from "svelte";
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
 
     export let data: PageData;
     export let form: ActionData;
 
-    onMount(() => title.set("Your profile"));
+    $: title.set("Your profile");
 </script>
+
+<svelte:head>
+    <title>{"Your profile"} | audiopub</title>
+</svelte:head>
 
 <h1>Your Profile</h1>
 

@@ -17,10 +17,14 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
-  import title from "$lib/title";
-  import { onMount } from "svelte";
-  onMount(() => title.set("Forgot Password"));
+  import { getTitle } from "$lib/title";
+  const title = getTitle();
+  $: title.set("Forgot Password");
 </script>
+
+<svelte:head>
+    <title>{"Forgot Password"} | audiopub</title>
+</svelte:head>
 
 <h1>Forgot password</h1>
 

@@ -10,7 +10,8 @@
     import { onMount } from "svelte";
     import CommentList from "$lib/components/comment_list.svelte";
     import StreamChatList from "$lib/components/stream_chat_list.svelte";
-    import title from "$lib/title";
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
     import SafeMarkdown from "$lib/components/safe_markdown.svelte";
     import type { ClientsideComment } from "$lib/types.js";
     import SubscribeButton from "$lib/components/subscribe_button.svelte";
@@ -35,10 +36,11 @@
     let showEditDialog = false;
     let showHistoryDialog = false;
 
+    $: if (data.audio) {
+        title.set(data.audio.title);
+    }
+
     onMount(() => {
-        if (data.audio) {
-            title.set(data.audio.title);
-        }
         const stored = localStorage.getItem("audiopub_autoplay");
         if (stored !== null) {
             autoplayEnabled = stored === "true";
@@ -199,6 +201,10 @@
         }
     }
 </script>
+
+<svelte:head>
+    <title>{data.audio.title} | audiopub</title>
+</svelte:head>
 
 <h1>
     {data.audio.title}

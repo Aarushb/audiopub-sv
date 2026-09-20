@@ -18,10 +18,10 @@
 -->
 <script lang="ts">
     import { enhance } from "$app/forms";
-    import title from "$lib/title";
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
     import Modal from "$lib/components/modal.svelte";
-    import { onMount } from "svelte";
-    onMount(() => title.set("Go Live"));
+    $: title.set("Go Live");
 
     let submitting = false;
     let showConfirm = false;
@@ -30,6 +30,10 @@
     let descriptionValue = "";
     let archiveValue = false;
 </script>
+
+<svelte:head>
+    <title>{"Go Live"} | audiopub</title>
+</svelte:head>
 
 <h1>Go Live</h1>
 

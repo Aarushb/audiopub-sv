@@ -52,6 +52,10 @@
     });
 </script>
 
+<svelte:head>
+    <title>Notifications | audiopub</title>
+</svelte:head>
+
 <h1>Notifications</h1>
 
 {#if browser && data.user && permissionGranted}

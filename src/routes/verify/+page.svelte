@@ -18,14 +18,18 @@
 -->
 <script lang="ts">
     import { enhance } from "$app/forms";
-    import title from "$lib/title";
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
     import type { ActionData } from "./$types";
-    import { onMount } from "svelte";
 
     export let form: ActionData;
 
-    onMount(() => title.set("Verify your email"));
+    $: title.set("Verify your email");
 </script>
+
+<svelte:head>
+    <title>{"Verify your email"} | audiopub</title>
+</svelte:head>
 
 <h1>Verify your email</h1>
 

@@ -5,13 +5,17 @@
 -->
 <script lang="ts">
   import AudioList from "$lib/components/audio_list.svelte";
-  import title from "$lib/title";
-  import { onMount } from "svelte";
+  import { getTitle } from "$lib/title";
+  const title = getTitle();
 
   export let data;
 
-  onMount(() => title.set(`Search results for: ${data.query}`));
+  $: title.set(`Search results for: ${data.query}`);
 </script>
+
+<svelte:head>
+    <title>{`Search results for: `} | audiopub</title>
+</svelte:head>
 
 <h1>Search results for: {data.query}</h1>
 

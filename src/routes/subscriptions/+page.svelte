@@ -1,13 +1,17 @@
 <script lang="ts">
     import AudioList from "$lib/components/audio_list.svelte";
     import StreamCard from "$lib/components/stream_card.svelte";
-    import title from "$lib/title";
-    import { onMount } from "svelte";
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
 
     export let data;
 
-    onMount(() => title.set("Subscriptions"));
+    $: title.set("Subscriptions");
 </script>
+
+<svelte:head>
+    <title>{"Subscriptions"} | audiopub</title>
+</svelte:head>
 
 <h1>Subscriptions</h1>
 

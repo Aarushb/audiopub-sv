@@ -18,8 +18,8 @@
 -->
 <script lang="ts">
     import { enhance } from "$app/forms";
-    import title from "$lib/title";
-    import { onMount } from "svelte";
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
     import type { PageData } from "./$types";
     import AudioPlayer from "$lib/components/audio_player.svelte";
     import SafeMarkdown from "$lib/components/safe_markdown.svelte";
@@ -27,11 +27,15 @@
     export let data: PageData;
 
     $: pageTitle = data.isLive ? "Go Live (Publish Live Archive)" : "Upload Audio";
-    onMount(() => title.set(pageTitle));
+    $: title.set(pageTitle);
     let submitting = false;
 
     $: announcements = data.announcements ?? [];
 </script>
+
+<svelte:head>
+    <title>{pageTitle} | audiopub</title>
+</svelte:head>
 
 <h1>{pageTitle}</h1>
 

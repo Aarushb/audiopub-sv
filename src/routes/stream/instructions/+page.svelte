@@ -18,18 +18,18 @@
 -->
 <script lang="ts">
     import { enhance } from "$app/forms";
-    import title from "$lib/title";
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
     import {
         streamIngestHost,
         streamIngestPort,
     } from "$lib/streaming_config";
     import { liveUsernamePath } from "$lib/live_links";
     import { page } from "$app/stores";
-    import { onMount } from "svelte";
 
     export let data;
 
-    onMount(() => title.set("Stream Instructions"));
+    $: title.set("Stream Instructions");
 
     let showSensitiveInfo = false;
 
@@ -53,6 +53,10 @@
         ? `${$page.url.origin}${liveUsernamePath(data.user.name)}`
         : `${$page.url.origin}/live/@<your-username>`;
 </script>
+
+<svelte:head>
+    <title>{"Stream Instructions"} | audiopub</title>
+</svelte:head>
 
 <h1>How to Stream to audiopub</h1>
 

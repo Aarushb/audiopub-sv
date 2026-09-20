@@ -6,7 +6,8 @@
 <script lang="ts">
     import AudioList from "$lib/components/audio_list.svelte";
     import StreamCard from "$lib/components/stream_card.svelte";
-    import title from "$lib/title";
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
     import { onMount } from "svelte";
 
     export let data;
@@ -60,6 +61,10 @@
 
     $: paginationBaseUrl = `/?sort=${data.sortField}${data.sortField === "random" ? "" : "&order=" + data.sortOrder}&filter_clips=${clipsChecked}&filter_archives=${archivesChecked}&filter_playlists=${playlistsChecked}`;
 </script>
+
+<svelte:head>
+    <title>{"Home"} | audiopub</title>
+</svelte:head>
 
 <h1>Welcome to Audiopub</h1>
 

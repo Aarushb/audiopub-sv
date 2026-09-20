@@ -23,9 +23,9 @@
   gets a way onwards instead of a bare 404.
 -->
 <script lang="ts">
-    import { onMount } from "svelte";
     import { page } from "$app/stores";
-    import title from "$lib/title";
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
 
     $: live = $page.error?.live;
     $: userName = live?.userName ?? "";
@@ -42,8 +42,12 @@
     // badly mistyped name gets the profile link only.
     $: canSearch = userName.length >= 3;
 
-    onMount(() => title.set(heading));
+    $: title.set(heading);
 </script>
+
+<svelte:head>
+    <title>{heading} | audiopub</title>
+</svelte:head>
 
 <div class="not-live">
     <h1>{heading}</h1>

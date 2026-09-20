@@ -17,13 +17,18 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
-    import title from "$lib/title";
+    import { getTitle } from "$lib/title";
+    const title = getTitle();
     import AudioList from "$lib/components/audio_list.svelte";
     import type { PageData } from "./$types";
 
     export let data: PageData;
     title.set("My Favorites");
 </script>
+
+<svelte:head>
+    <title>{"My Favorites"} | audiopub</title>
+</svelte:head>
 
 <h1>My Favorites</h1>
 
