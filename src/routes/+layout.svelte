@@ -11,9 +11,22 @@
     import OneSignal from "react-onesignal";
     import type { LayoutData } from "./$types";
     import * as envPublic from "$env/static/public";
+    import KeyboardShortcutsModal from "$lib/components/keyboard_shortcuts_modal.svelte";
     const PUBLIC_ONE_SIGNAL_APP_ID = (envPublic as any).PUBLIC_ONE_SIGNAL_APP_ID;
 
     export let data: LayoutData;
+
+    let shortcutsModalVisible = false;
+
+    function handleGlobalKeydown(event: KeyboardEvent) {
+        if (event.altKey || event.ctrlKey || event.metaKey) return;
+        const target = event.target as HTMLElement;
+        if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") return;
+        if (event.key === "?") {
+            event.preventDefault();
+            shortcutsModalVisible = true;
+        }
+    }
 
     let unreadCount = 0;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -86,6 +99,7 @@
 
         window.addEventListener("visibilitychange", handleVisibility);
         window.addEventListener("focus", handleFocus);
+        window.addEventListener("keydown", handleGlobalKeydown);
 
         if (browser && PUBLIC_ONE_SIGNAL_APP_ID) {
             try {
@@ -107,6 +121,7 @@
             if (timer) clearTimeout(timer);
             window.removeEventListener("visibilitychange", handleVisibility);
             window.removeEventListener("focus", handleFocus);
+            window.removeEventListener("keydown", handleGlobalKeydown);
         };
     });
 
@@ -176,6 +191,8 @@
 <main>
     <slot />
 </main>
+
+<KeyboardShortcutsModal bind:visible={shortcutsModalVisible} />
 
 <hr />
 <footer>
