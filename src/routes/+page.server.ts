@@ -45,12 +45,18 @@ function readSavedFilterPrefs(raw: string | undefined): SavedFilterPrefs {
 export const load: PageServerLoad = async (event) => {
     const pageString = event.url.searchParams.get("page");
     const page = pageString ? parseInt(pageString, 10) : 1;
+    const viewer = event.locals.user;
 
     // A bare link to "/" (the nav's Home link, the logo, etc.) carries no
     // query params at all, so without this fallback every such navigation
     // silently reset filters and sort back to the defaults — even though
     // the user had deliberately chosen something else moments earlier.
-    const savedPrefs = readSavedFilterPrefs(event.cookies.get(FILTER_COOKIE_NAME));
+    // The account's own saved preference (if any) wins over the device
+    // cookie once logged in, so a choice made on one device follows you to
+    // another rather than staying stuck to whichever browser set the cookie.
+    const savedPrefs: SavedFilterPrefs =
+        viewer?.preferences?.homeFilters ??
+        readSavedFilterPrefs(event.cookies.get(FILTER_COOKIE_NAME));
 
     const hasFilterParams =
         event.url.searchParams.has("filter_clips") ||
@@ -110,19 +116,25 @@ export const load: PageServerLoad = async (event) => {
 
     // Whenever the request explicitly chose filters or a sort (via the
     // "Apply Filters" form, or a filtered link), remember that choice so it
-    // survives a later bare navigation back to "/".
+    // survives a later bare navigation back to "/". The cookie stays the
+    // fallback for logged-out visitors (and for a device before its first
+    // sync); logged-in requests also mirror the choice onto the account.
     if (hasFilterParams || hasSortParams) {
-        event.cookies.set(
-            FILTER_COOKIE_NAME,
-            JSON.stringify({
-                clips: filterClips,
-                archives: filterArchives,
-                playlists: filterPlaylists,
-                sort: validatedSortField,
-                order: validatedSortOrder,
-            }),
-            { path: "/", maxAge: 60 * 60 * 24 * 365 },
-        );
+        const newFilterPrefs = {
+            clips: filterClips,
+            archives: filterArchives,
+            playlists: filterPlaylists,
+            sort: validatedSortField,
+            order: validatedSortOrder,
+        };
+        event.cookies.set(FILTER_COOKIE_NAME, JSON.stringify(newFilterPrefs), {
+            path: "/",
+            maxAge: 60 * 60 * 24 * 365,
+        });
+        if (viewer) {
+            viewer.preferences = { ...(viewer.preferences ?? {}), homeFilters: newFilterPrefs };
+            await viewer.save();
+        }
     }
 
     const limit = 30;
