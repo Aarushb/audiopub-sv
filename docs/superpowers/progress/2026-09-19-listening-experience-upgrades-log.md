@@ -2,6 +2,34 @@
 
 Spec: `docs/superpowers/specs/2026-09-19-listening-experience-upgrades-design.md`
 
+## 2026-09-20 — Collapsible comment replies + arrow-key navigation (Tasks 3-4)
+
+Wrapped `comment.svelte`'s recursive reply render in a `<details>`
+disclosure (collapsed by default, labelled with the reply count),
+matching the same pattern upstream already uses for chapters. Verified
+live on the 3-level test thread built during Task 1: each level's "N
+replies" summary expands independently, and expanding one level never
+auto-expands the next one down.
+
+Added arrow-key navigation on top of that (`comment_list.svelte`): `↑`/`↓`
+move between sibling comments at the same nesting level, `→` expands a
+comment's own replies and moves focus into the first one, `←` collapses
+them and moves focus to the parent (or, for a root comment with no
+parent, just collapses and stays put). Implemented as a single shared
+keydown handler bound on every nesting level's `<ul>`, guarded by a new
+`isNested` prop so only the outermost (page-level) instance actually acts
+on a bubbled event — nested instances see `isNested === true` and return
+immediately, so a keypress deep in the tree is handled exactly once
+regardless of depth. No ARIA roles were changed; every element keeps its
+native semantics (heading link, `<details>`/`<summary>`), so Tab-based
+navigation and screen-reader browse mode are unaffected — the arrows are
+purely additive. Verified all four directions via dispatched
+`KeyboardEvent`s against the live 3-level thread (a caveat: the first
+`ArrowLeft` test initially looked wrong until realized it was checking
+the wrong nesting level's `<details>` state in the test script itself,
+not a bug in the app — corrected the assertion and confirmed correct
+behavior at every level).
+
 ## 2026-09-20 — Pagination page-jump combobox (Task 2)
 
 Replaced the "Page X of Y" text in `audio_list.svelte`'s shared pagination
