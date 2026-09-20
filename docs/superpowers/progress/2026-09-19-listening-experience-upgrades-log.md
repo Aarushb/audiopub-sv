@@ -637,3 +637,68 @@ Committed as a single merge commit,
 `merge: pull upstream mute feature into feature/listening-experience-upgrades`,
 plus the `db:migrate` step which needs to be re-run by anyone else pulling
 this branch.
+
+## 2026-09-20 — Track-change announcements, comment reply hint, playback resume
+
+Three more accessibility/UX items the user asked for directly.
+
+- **ARIA-live track-change announcements**: N/P navigation (and autoplay
+  chaining) on the listen page goes through a full `window.location.href`
+  reload rather than SvelteKit's client-side `goto()` — deliberately left
+  that way rather than converting it, since a client-side nav would need
+  the `<audio>` element's `src` swapped and `.load()` called manually on
+  every track change with no way to verify actual playback behaves
+  correctly in this browser-automation environment (confirmed earlier
+  this session to have no audio decode pipeline at all). Given that
+  constraint, added `src/routes/listen/[id]/+page.svelte`'s own
+  `aria-live="polite"` `.sr-only` region (matching the established pattern
+  already used in `quickfeed_player.svelte`'s `announceStatus`), populated
+  imperatively via `bind:this` + a post-mount `setTimeout`, not a reactive
+  `{expression}` — a live region's content has to change *after* it's
+  already registered with the screen reader for the change to be
+  announced at all; content that arrives already-populated in the initial
+  SSR markup (which a reactive binding would produce) doesn't count as a
+  change and won't be announced. Fires "Now playing: {title}" ~300ms
+  after every page load, reinforcing (not replacing) the native
+  page-title announcement screen readers already give on full navigation.
+- **Comment reply-count hint**: the arrow-key comment navigation focuses
+  the whole `.comment` container (from an earlier fix this session), but
+  a comment's reply count and the collapsed `<details class="replies">`
+  disclosure live in a sibling element outside that container — so a
+  screen reader landing on a comment via arrow keys never heard "3
+  replies" and had no way to know pressing right arrow would reveal them.
+  Added an SR-only `<span>` inside `.comment` itself (so it's part of
+  what's read when the container is focused) stating the reply count and,
+  reactively via `bind:open` on the replies `<details>`, either "press
+  right arrow to expand" or "replies expanded, press left arrow to
+  collapse" depending on current state. Verified live that dispatching a
+  real ArrowRight keydown on a comment updates both `details.open` and
+  the hint text together, and that focus correctly lands on the first
+  reply.
+- **Resume playback position per track**: `audio_player.svelte` gained an
+  optional `audioId` prop (only listen/[id] passes it; the upload page's
+  announcement preview and the live-stream player don't, so they're
+  unaffected). When set, position is saved to
+  `localStorage["audiopub_playback_{id}"]` on `pause`, every 5 seconds
+  while playing, and on `beforeunload` (covers the common case of
+  navigating away mid-playback via N/P without pausing first — `pause`
+  alone wouldn't catch that). Restored on `loadedmetadata` if the saved
+  position is past 5 seconds in and not within the last 5% of the track's
+  duration (skips both "resume 3 seconds in" and "resume the tail end of
+  a track you already finished"); cleared entirely on `ended`, matching
+  YouTube not offering to resume a completed video. Verified live via
+  direct event dispatch: save-on-pause, restore-on-loadedmetadata,
+  clear-on-ended, and both the near-start and near-end skip conditions
+  all behaved correctly.
+
+### Verification
+
+`npm run check` — 0 errors, 0 warnings, 1041 files. `npm run build` —
+succeeds. All three verified live in the browser (not just type-checked):
+the live region's text after N/P navigation, the SR-only hint text and
+its state change on a real ArrowRight dispatch, and the full playback-
+position save/restore/clear cycle including edge conditions. Zero console
+errors throughout. Committed as three atomic commits: `feat: announce
+track changes via aria-live on the listen page`, `feat: announce reply
+count and expand hint when navigating comments`, `feat: remember and
+resume playback position per track`.
