@@ -19,6 +19,12 @@
 <script lang="ts">
     import { enhance } from "$app/forms";
     import title from "$lib/title";
+    import {
+        streamIngestHost,
+        streamIngestPort,
+    } from "$lib/streaming_config";
+    import { liveUsernamePath } from "$lib/live_links";
+    import { page } from "$app/stores";
     import { onMount } from "svelte";
 
     export let data;
@@ -27,14 +33,25 @@
 
     let showSensitiveInfo = false;
 
+    const ingestAddress = `${streamIngestHost}:${streamIngestPort}`;
+
     $: icecastUrl =
         data.user?.streamKey && showSensitiveInfo
-            ? `icecast://source:${data.user.streamKey}@live.audiopub.site:8000/${data.user.id}`
+            ? `icecast://source:${data.user.streamKey}@${ingestAddress}/${data.user.id}`
             : null;
 
     const placeholderKey = "<your-stream-key>";
     $: placeholderUserId = data.user?.id ?? "<your-user-id>";
     $: hasUser = data.user !== null;
+
+    /*
+     * Built from the origin the page was actually served on rather than from a
+     * configured base URL, so an instance reachable under more than one name
+     * hands out a link that works from where the broadcaster is standing.
+     */
+    $: shareUrl = data.user
+        ? `${$page.url.origin}${liveUsernamePath(data.user.name)}`
+        : `${$page.url.origin}/live/@<your-username>`;
 </script>
 
 <h1>How to Stream to audiopub</h1>
@@ -60,6 +77,33 @@
         is like a password. You can find your stream key on your
         <a href="/profile">Profile page</a>. If you have not set a stream key
         yet, you can generate one there.
+    </p>
+</section>
+
+<section>
+    <h2>Your Stream Link</h2>
+
+    <p>
+        Whatever you are broadcasting is always reachable at the link below. It
+        is tied to your name rather than to any one stream, so it stays the same
+        every time you go live, and it is safe to put in a bio or a signature.
+    </p>
+
+    <p class="url-display">
+        {#if hasUser}
+            <code class="full-url">{shareUrl}</code>
+        {:else}
+            <code class="full-url masked">
+                {shareUrl} (log in to see your stream link)
+            </code>
+        {/if}
+    </p>
+
+    <p>
+        Anyone who opens it lands on your live page, with the player and the
+        chat. If you are not broadcasting at the time, it tells them so rather
+        than leading nowhere. This link is not sensitive; unlike the URLs
+        further down this page, it does not contain your stream key.
     </p>
 </section>
 
@@ -97,12 +141,12 @@
     <dl>
         <dt>Server address</dt>
         <dd>
-            <code>live.audiopub.site</code>
+            <code>{streamIngestHost}</code>
         </dd>
 
         <dt>Port</dt>
         <dd>
-            <code>8000</code>
+            <code>{streamIngestPort}</code>
         </dd>
 
         <dt>Mount point</dt>
@@ -152,7 +196,7 @@
             <code class="sensitive full-url">{icecastUrl}</code>
         {:else}
             <code class="sensitive masked full-url">
-                icecast://source:{placeholderKey}@live.audiopub.site:8000/{placeholderUserId}
+                icecast://source:{placeholderKey}@{ingestAddress}/{placeholderUserId}
             </code>
         {/if}
     </p>
@@ -211,7 +255,7 @@
             <code class="sensitive full-url">{icecastUrl}</code>
         {:else}
             <code class="sensitive masked full-url">
-                icecast://source:{placeholderKey}@live.audiopub.site:8000/{placeholderUserId}
+                icecast://source:{placeholderKey}@{ingestAddress}/{placeholderUserId}
             </code>
         {/if}
     </p>

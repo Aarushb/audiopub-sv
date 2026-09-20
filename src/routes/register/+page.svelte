@@ -38,6 +38,7 @@
 
     <div class="form-group">
         <label for="username">Username:</label>
+        <!-- svelte-ignore a11y-autofocus (intentional primary form focus from PR #7) -->
         <input
             type="text"
             id="username"

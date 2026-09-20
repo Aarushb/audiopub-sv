@@ -21,15 +21,42 @@
     import title from "$lib/title";
     import { onMount } from "svelte";
     import type { PageData } from "./$types";
+    import AudioPlayer from "$lib/components/audio_player.svelte";
+    import SafeMarkdown from "$lib/components/safe_markdown.svelte";
 
     export let data: PageData;
 
     $: pageTitle = data.isLive ? "Go Live (Publish Live Archive)" : "Upload Audio";
     onMount(() => title.set(pageTitle));
     let submitting = false;
+
+    $: announcements = data.announcements ?? [];
 </script>
 
 <h1>{pageTitle}</h1>
+
+{#if announcements.length > 0}
+    <section class="announcements" aria-label="Announcements from the administrators">
+        <h2>Please read before uploading</h2>
+        {#each announcements as announcement (announcement.id)}
+            <article class="announcement">
+                <h3>
+                    <a href="/listen/{announcement.id}">{announcement.title}</a>
+                </h3>
+                <AudioPlayer
+                    preload="none"
+                    sources={[
+                        { src: `/${announcement.path}`, type: announcement.mimeType },
+                        { src: `/${announcement.transcodedPath}`, type: "audio/aac" },
+                    ]}
+                />
+                {#if announcement.description}
+                    <SafeMarkdown source={announcement.description} />
+                {/if}
+            </article>
+        {/each}
+    </section>
+{/if}
 
 <form
     use:enhance={() => {
@@ -48,6 +75,7 @@
 
     <div class="form-group">
         <label for="title">Title:</label>
+        <!-- svelte-ignore a11y-autofocus (intentional primary form focus from PR #7) -->
         <input
             type="text"
             id="title"
@@ -131,6 +159,21 @@
         Please follow common decency and the law. Moderators and admins reserve
         the right to remove any content that is deemed inappropriate or illegal.
     </p>
+    {#if data.isAdmin}
+        <div class="form-group">
+            <!-- A switch rather than a plain checkbox, and still a real form
+                 control so the upload works without JavaScript. -->
+            <label class="announcement-toggle" for="isAnnouncement">
+                <input
+                    type="checkbox"
+                    role="switch"
+                    id="isAnnouncement"
+                    name="isAnnouncement"
+                />
+                Pin this audio as an announcement at the top of this page
+            </label>
+        </div>
+    {/if}
     <button type="submit" class="btn" disabled={submitting}
         >{#if submitting}Uploading...{:else}Upload{/if}</button
     >
@@ -228,6 +271,39 @@
         margin: 0.35rem 0 0;
         font-size: 0.85rem;
         color: #666;
+    }
+
+    .announcements {
+        max-width: 600px;
+        margin: 0 auto 1.5rem;
+        padding: 1rem;
+        border: 1px solid #ffeeba;
+        border-radius: 8px;
+        background-color: #fff3cd;
+        color: #856404;
+    }
+
+    .announcements h2 {
+        margin-top: 0;
+        font-size: 1.1rem;
+    }
+
+    .announcement + .announcement {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #ffeeba;
+    }
+
+    .announcement h3 {
+        margin: 0 0 0.5rem;
+        font-size: 1rem;
+    }
+
+    .announcement-toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-weight: normal;
     }
 
     .btn {

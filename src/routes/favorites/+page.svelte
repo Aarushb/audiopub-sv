@@ -36,7 +36,6 @@
     
     <AudioList
         audios={data.audios}
-        currentUser={data.user}
         page={data.page}
         totalPages={data.totalPages}
         groupThreshold={0}
@@ -57,13 +56,4 @@
         line-height: 1.5;
     }
 
-    .empty-state a {
-        color: var(--text-link-color, #0066cc);
-        text-decoration: none;
-        font-weight: 500;
-    }
-
-    .empty-state a:hover {
-        text-decoration: underline;
-    }
 </style>

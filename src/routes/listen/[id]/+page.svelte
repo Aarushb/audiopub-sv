@@ -15,9 +15,25 @@
     import type { ClientsideComment } from "$lib/types.js";
     import SubscribeButton from "$lib/components/subscribe_button.svelte";
     import AudioPlayer from "$lib/components/audio_player.svelte";
+    import Modal from "$lib/components/modal.svelte";
+
+    export let form: any;
+
+    type Chapter = {
+        time: number;
+        label: string;
+        timestamp: string;
+    };
+
+    type ChapterSection = {
+        chapters: Chapter[];
+        description: string;
+    };
 
     let autoplayEnabled = true;
     let audioElement: HTMLAudioElement | undefined = undefined;
+    let showEditDialog = false;
+    let showHistoryDialog = false;
 
     onMount(() => {
         if (data.audio) {
@@ -37,6 +53,84 @@
             }, 100);
         }
     });
+
+    function parseTimestamp(timestamp: string): number | null {
+        const parts = timestamp.split(":").map(Number);
+        if (parts.some((part) => !Number.isInteger(part))) return null;
+        if (parts.length === 2) {
+            const [minutes, seconds] = parts;
+            if (seconds > 59) return null;
+            return minutes * 60 + seconds;
+        }
+        if (parts.length === 3) {
+            const [hours, minutes, seconds] = parts;
+            if (minutes > 59 || seconds > 59) return null;
+            return hours * 3600 + minutes * 60 + seconds;
+        }
+        return null;
+    }
+
+    function parseChapterLines(lines: string[]): Chapter[] {
+        return lines
+            .map((line) => {
+                const match = line.match(
+                    /^\s*(?:[-*+]\s*|\d+[.)]\s*)?\[?((?:\d{1,2}:)?\d{1,2}:\d{2})\]?\s*(?:[-:]\s*)?(.*)$/,
+                );
+                if (!match) return null;
+
+                const time = parseTimestamp(match[1]);
+                if (time === null) return null;
+
+                return {
+                    time,
+                    timestamp: match[1],
+                    label: match[2].trim() || "Chapter",
+                };
+            })
+            .filter((chapter): chapter is Chapter => chapter !== null)
+            .sort((a, b) => a.time - b.time);
+    }
+
+    function extractChapterSection(description: string): ChapterSection {
+        const lines = description.split("\n");
+        const start = lines.findIndex((line) =>
+            /^#{1,6}\s+chapters\s*$/i.test(line.trim()),
+        );
+        if (start === -1) {
+            return { chapters: [], description };
+        }
+
+        const end = lines.findIndex(
+            (line, index) =>
+                index > start && /^#{1,6}\s+\S/.test(line.trim()),
+        );
+        const chapterLines = lines.slice(start + 1, end === -1 ? undefined : end);
+        const renderedDescription = [
+            ...lines.slice(0, start),
+            ...(end === -1 ? [] : lines.slice(end)),
+        ]
+            .join("\n")
+            .trim();
+
+        return {
+            chapters: parseChapterLines(chapterLines),
+            description: renderedDescription,
+        };
+    }
+
+    function seekToChapter(time: number) {
+        if (!audioElement) return;
+        audioElement.currentTime = time;
+    }
+
+    $: chapterSection = extractChapterSection(data.audio?.description || "");
+    $: chapters = chapterSection.chapters;
+    $: renderedDescription = chapterSection.description;
+
+    let commentField: HTMLTextAreaElement;
+    function onReply(comment: ClientsideComment) {
+        commentField.focus();
+    }
 
     const handlePlay = () => {
         if (data.audio) {
@@ -90,8 +184,19 @@
     }
 </script>
 
-{#if data.audio}
-<h1>{data.audio.title}</h1>
+<h1>
+    {data.audio.title}
+    {#if data.audio.isAnnouncement}<span class="announcement-tag"
+            >[announcement]</span
+        >{/if}
+    {#if data.hasEdits}<span class="edited-tag">[edited]</span>{/if}
+</h1>
+
+{#if data.audio.isAnnouncement}
+    <p class="announcement-note" role="note">
+        This audio is pinned to the top of the upload page as an announcement.
+    </p>
+{/if}
 
 <div class="audio-player">
     <AudioPlayer
@@ -156,9 +261,155 @@
     {/if}
     <p>Upload date: {new Date(data.audio.createdAt).toLocaleDateString()}</p>
 
-    {#if data.audio.description}
+    {#if chapters.length > 0}
+        <details class="chapters">
+            <summary>Chapters</summary>
+            <ol>
+                {#each chapters as chapter}
+                    <li>
+                        <button
+                            type="button"
+                            on:click={() => seekToChapter(chapter.time)}
+                        >
+                            <span>{chapter.timestamp}</span>
+                            {chapter.label}
+                        </button>
+                    </li>
+                {/each}
+            </ol>
+        </details>
+    {/if}
+
+    {#if renderedDescription}
         <h2>Description:</h2>
-        <SafeMarkdown source={data.audio.description} />
+        <SafeMarkdown source={renderedDescription} />
+    {/if}
+
+    {#if data.canEdit}
+        <button
+            type="button"
+            on:click={() => (showEditDialog = true)}
+            disabled={data.remainingEdits === 0}>Edit audio details</button
+        >
+        {#if data.remainingEdits === 0}
+            <p>You have used all 3 available edits.</p>
+        {/if}
+
+        <Modal bind:visible={showEditDialog}>
+            <h2>Edit audio details</h2>
+            {#if form?.editMessage}
+                <p class="form-message" role="alert">{form.editMessage}</p>
+            {/if}
+            <form
+                class="edit-form"
+                use:enhance={() => {
+                    return async ({ result, update }) => {
+                        await update();
+                        if (result.type === "success") {
+                            showEditDialog = false;
+                        }
+                    };
+                }}
+                action="?/edit"
+                method="POST"
+            >
+                    <label for="edit-title">Title:</label>
+                    <input
+                        id="edit-title"
+                        name="title"
+                        type="text"
+                        value={data.audio.title}
+                        required
+                        minlength="3"
+                        maxlength="120"
+                    />
+                    <label for="edit-description">Description:</label>
+                    <textarea
+                        id="edit-description"
+                        name="description"
+                        maxlength="5000"
+                        value={data.audio.description}
+                    ></textarea>
+                    {#if data.remainingEdits !== null}
+                        <p>{data.remainingEdits} edit(s) remaining.</p>
+                    {/if}
+                    <button type="submit">Save changes</button>
+                    <button
+                        type="button"
+                        on:click={() => (showEditDialog = false)}>Cancel</button
+                    >
+            </form>
+        </Modal>
+
+        {#if data.edits.length > 0}
+            <button type="button" on:click={() => (showHistoryDialog = true)}
+                >View edit history</button
+            >
+            <Modal bind:visible={showHistoryDialog}>
+                <h2>Edit history</h2>
+                <ol class="edit-history">
+                    {#each data.edits as edit}
+                        <li>
+                            <strong>{new Date(edit.createdAt).toLocaleString()}</strong>
+                            by @{edit.editor?.name || "unknown"}
+                            {#if edit.isAdminEdit}(administrator){/if}
+                            {#if edit.restoredEditId}(restoration){/if}
+                            <details>
+                                <summary>View changes</summary>
+                                <p><strong>Title:</strong> {edit.previousTitle} → {edit.newTitle}</p>
+                                <p><strong>Previous description:</strong></p>
+                                <pre>{edit.previousDescription}</pre>
+                                <p><strong>New description:</strong></p>
+                                <pre>{edit.newDescription}</pre>
+                                {#if data.isAdmin}
+                                    <form
+                                        use:enhance={() => {
+                                            return async ({ result, update }) => {
+                                                await update();
+                                                if (result.type === "success") {
+                                                    showHistoryDialog = false;
+                                                }
+                                            };
+                                        }}
+                                        action="?/revertEdit"
+                                        method="POST"
+                                    >
+                                        <input
+                                            type="hidden"
+                                            name="editId"
+                                            value={edit.id}
+                                        />
+                                        <button type="submit">Revert this edit</button>
+                                    </form>
+                                {/if}
+                            </details>
+                        </li>
+                    {/each}
+                </ol>
+                <button type="button" on:click={() => (showHistoryDialog = false)}
+                    >Close</button
+                >
+            </Modal>
+        {/if}
+    {/if}
+
+    {#if data.isAdmin}
+        <form use:enhance action="?/setAnnouncement" method="POST">
+            <!-- A plain button that states the action it performs, rather
+                 than a checkbox the admin has to remember to save. -->
+            <input
+                type="hidden"
+                name="isAnnouncement"
+                value={data.audio.isAnnouncement ? "off" : "on"}
+            />
+            <button type="submit">
+                {#if data.audio.isAnnouncement}
+                    Unpin as announcement
+                {:else}
+                    Pin as announcement on the upload page
+                {/if}
+            </button>
+        </form>
     {/if}
 
     {#if data.user && (data.isAdmin || data.user.id === data.audio.user?.id)}
@@ -175,39 +426,57 @@
         </form>
     {/if}
 
-    {#if data.audio.archivedStream}
-        <div class="chat-archive">
-            <h2>Stream Chat Archive</h2>
+    {#if data.archivedStreamChats && data.archivedStreamChats.length > 0 && data.archivedStreamId}
+        <details class="chat-archive">
+            <summary>Stream Chat Archive</summary>
             <StreamChatList
-                streamId={data.audio.archivedStream.id}
-                chats={data.audio.archivedStream.chats || []}
+                streamId={data.archivedStreamId}
+                chats={data.archivedStreamChats}
+                user={data.user ?? undefined}
+                isAdmin={data.isAdmin}
+                streamOwnerId={data.audio.user?.id ?? null}
+                onDelete={async (chatId) => {
+                    await fetch(`/live/${data.archivedStreamId}/${chatId}`, {
+                        method: "DELETE",
+                    });
+                }}
             />
-        </div>
-    {:else}
-        <CommentList
-            comments={data.comments}
-            isAdmin={data.isAdmin}
-            user={data.user || undefined}
-        />
+        </details>
+    {/if}
 
-        {#if data.user && !data.user.isBanned}
-            {#if !data.user.isTrusted}
-                <p role="alert">
-                    You're not trusted yet. Your comments will be reviewed before
-                    being shown. If you submit a comment, it will not be displayed
-                    until it's reviewed.
-                </p>
-            {/if}
-            <form use:enhance action="?/add_comment" method="POST">
-                <label for="comment">Add a comment:</label>
-                <textarea name="comment" id="comment" required maxlength="4000"
-                ></textarea>
-                <button type="submit">Submit</button>
-            </form>
+    <section role="group" aria-label="Comments">
+        <h2>Comments</h2>
+        {#if data.comments.length > 0}
+            <CommentList
+                comments={data.comments}
+                isAdmin={data.isAdmin}
+                user={data.user ?? undefined}
+                {onReply}
+            />
+        {:else}
+            <p>No comments yet</p>
         {/if}
+    </section>
+
+    {#if data.user && !data.user.isBanned}
+        <form use:enhance action="?/add_comment" method="POST">
+            {#if form?.replyTo}
+                <input type="hidden" name="parentId" value={form.replyTo.id} />
+                <label for="comment">Reply to @{form.replyTo.user.name}:</label>
+            {:else}
+                <label for="comment">Add a comment:</label>
+            {/if}
+            <textarea
+                bind:this={commentField}
+                name="comment"
+                id="comment"
+                required
+                maxlength="4000"
+            ></textarea>
+            <button type="submit">{form?.replyTo ? "Reply" : "Comment"}</button>
+        </form>
     {/if}
 </div>
-{/if}
 
 <style>
     h1 {
@@ -267,4 +536,99 @@
         border-top: 2px solid #eee;
         padding-top: 1rem;
     }
+
+    .chat-archive summary {
+        cursor: pointer;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .chapters {
+        margin-top: 1rem;
+    }
+
+    .chapters summary {
+        cursor: pointer;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .chapters ol {
+        margin: 0.5rem 0 0;
+        padding-left: 1.5rem;
+    }
+
+    .chapters li {
+        margin: 0.25rem 0;
+    }
+
+    .audio-details .chapters button {
+        background: none;
+        border: none;
+        color: #007bff;
+        cursor: pointer;
+        margin: 0;
+        padding: 0;
+        text-align: left;
+    }
+
+    .audio-details .chapters button:hover {
+        background: none;
+        text-decoration: underline;
+    }
+
+    .chapters span {
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+        margin-right: 0.5rem;
+    }
+
+    .edited-tag {
+        font-size: 0.65em;
+        font-weight: normal;
+    }
+
+    .announcement-tag {
+        font-size: 0.65em;
+        font-weight: normal;
+        color: #856404;
+    }
+
+    .announcement-note {
+        margin: 0 auto 1rem;
+        max-width: 700px;
+        padding: 0.5rem 0.75rem;
+        background: #fff3cd;
+        border: 1px solid #ffeeba;
+        border-radius: 4px;
+        color: #856404;
+    }
+
+    .edit-form {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+
+    .edit-form input,
+    .edit-form textarea {
+        padding: 0.5rem;
+        box-sizing: border-box;
+        width: 100%;
+    }
+
+    .edit-form textarea {
+        min-height: 8rem;
+    }
+
+    .edit-history pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
+    .form-message {
+        color: #a00;
+    }
+
 </style>

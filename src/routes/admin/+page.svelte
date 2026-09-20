@@ -20,8 +20,16 @@
     import { enhance } from "$app/forms";
     import title from "$lib/title.js";
     import { onMount } from "svelte";
+    import Modal from "$lib/components/modal.svelte";
 
     export let data;
+    let selectedEdit: any = null;
+    let showEditDialog = false;
+
+    function openEditDialog(edit: any) {
+        selectedEdit = edit;
+        showEditDialog = true;
+    }
 
     onMount(() => title.set("Admin"));
 </script>
@@ -64,6 +72,69 @@
     </table>
 {/if}
 
+<h1>Recent Audio Edits</h1>
+
+{#if data.recentEdits.length === 0}
+    <p>No audio edits.</p>
+{:else}
+    <div class="edit-list">
+        {#each data.recentEdits as edit}
+            <article>
+                <h2>
+                    <a href="/listen/{edit.audioId}">{edit.audioTitle}</a>
+                    <span class="edited-tag">[edited]</span>
+                </h2>
+                <p>
+                    Edited by @{edit.editor || "unknown"} on
+                    {new Date(edit.createdAt).toLocaleString()}.
+                    {#if edit.audioOwner}Owner: @{edit.audioOwner}.{/if}
+                    {#if edit.isAdminEdit}Administrator edit.{/if}
+                    {#if edit.restoredEditId}Restoration of an earlier edit.{/if}
+                </p>
+                <button type="button" on:click={() => openEditDialog(edit)}
+                    >View details</button
+                >
+            </article>
+        {/each}
+    </div>
+{/if}
+
+<Modal bind:visible={showEditDialog}>
+    {#if selectedEdit}
+        <div class="edit-dialog-content">
+            <h2>Edit details</h2>
+            <p>
+                <a href="/listen/{selectedEdit.audioId}">{selectedEdit.audioTitle}</a>
+                edited by @{selectedEdit.editor || "unknown"} on
+                {new Date(selectedEdit.createdAt).toLocaleString()}.
+            </p>
+            <p><strong>Title:</strong> {selectedEdit.previousTitle} → {selectedEdit.newTitle}</p>
+            <p><strong>Previous description:</strong></p>
+            <pre>{selectedEdit.previousDescription}</pre>
+            <p><strong>New description:</strong></p>
+            <pre>{selectedEdit.newDescription}</pre>
+            <form
+                use:enhance={() => {
+                    return async ({ result, update }) => {
+                        await update();
+                        if (result.type === "success") {
+                            showEditDialog = false;
+                        }
+                    };
+                }}
+                action="?/restoreEdit"
+                method="post"
+            >
+                <input type="hidden" name="editId" value={selectedEdit.id} />
+                <button type="submit">Revert this edit</button>
+            </form>
+            <button type="button" on:click={() => (showEditDialog = false)}
+                >Close</button
+            >
+        </div>
+    {/if}
+</Modal>
+
 <style>
     table {
         width: 100%;
@@ -98,5 +169,30 @@
 
     button:hover {
         background-color: #444;
+    }
+
+    .edit-list {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .edit-list article {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 1rem;
+    }
+
+    .edit-list h2 {
+        margin-top: 0;
+    }
+
+    .edit-dialog-content pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
+    .edited-tag {
+        font-size: 0.65em;
+        font-weight: normal;
     }
 </style>

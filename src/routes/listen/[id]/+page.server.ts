@@ -16,62 +16,104 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-import { error, redirect } from "@sveltejs/kit";
-import type { Actions, PageServerLoad } from "./$types";
-import { Audio, User, Comment, Stream, StreamChat, Subscription } from "$lib/server/database";
-import AudioFollow from "$lib/server/database/models/audio_follow";
-import AudioFavorite from "$lib/server/database/models/audio_favorite";
 import fs from "fs/promises";
-import { Sequelize, Op } from "sequelize";
+import {
+    Audio,
+    Comment,
+    User,
+    AudioFollow,
+    Notification,
+    Stream,
+    StreamChat,
+    Subscription,
+    AudioEdit,
+} from "$lib/server/database";
+import AudioFavorite from "$lib/server/database/models/audio_favorite";
+import { error, fail, redirect } from "@sveltejs/kit";
+import type { Actions, PageServerLoad } from "./$types";
+import sendEmail from "$lib/server/email";
+import { json, Op, Sequelize } from "sequelize";
+import { Json } from "sequelize/lib/utils";
+import { subscribe, unsubscribe } from "$lib/server/subscriptions";
+import {
+    AudioEditLimitError,
+    AudioNotFoundError,
+    MAX_USER_AUDIO_EDITS,
+    updateAudioDetails,
+} from "$lib/server/audio_edits";
 
 export const load: PageServerLoad = async (event) => {
     const audio = await Audio.findByPk(event.params.id, {
-        include: [
-            User,
-            {
-                model: Stream,
-                as: "archivedStream",
-                include: [
-                    {
-                        model: StreamChat,
-                        as: "chats",
-                        include: [User],
-                    },
-                ],
-            },
-        ],
+        include: [{ model: Stream, as: "archivedStream" }, User],
     });
-    if (!audio) return error(404, "Not found");
-    if (!audio.user?.isTrusted && !event.locals.user?.isAdmin)
-        return error(403, "Forbidden");
 
-    let comments: Comment[] = [];
-    try {
-        comments = await Comment.findAll({
-            where: { audioId: audio.id, parentId: null },
-            include: [
-                User,
-                {
-                    model: Comment,
-                    as: "replies",
-                    include: [User],
-                },
-            ],
-            order: [
-                ["createdAt", "DESC"],
-                [{ model: Comment, as: "replies" }, "createdAt", "ASC"],
-            ],
-        });
-    } catch (err) {
-        console.error("Error fetching comments:", err);
+    if (!audio) {
+        const stream = await Stream.findByPk(event.params.id);
+        if (stream && stream.state !== "finished") {
+            return redirect(302, `/live/${event.params.id}`);
+        }
+        return error(404, "Not found");
     }
 
-    const sortedComments = comments.filter((comment) => {
-        if (event.locals.user?.isAdmin) return true;
-        if (comment.user?.isTrusted) return true;
-        if (comment.user?.id === event.locals.user?.id) return true;
-        return false;
+    const viewer = event.locals.user;
+    if (
+        audio.user &&
+        !audio.user.isTrusted &&
+        !viewer?.isAdmin &&
+        viewer?.id !== audio.userId
+    ) {
+        return error(404, "Not found");
+    }
+
+    const comments = await Comment.findAll({
+        where: { audioId: audio.id },
+        include: {
+            model: User,
+        },
     });
+
+    if (viewer) {
+        const relatedCommentIds = comments.map((c) => c.id);
+
+        const whereClause: any = {
+            userId: viewer.id,
+            readAt: null,
+        };
+
+        const orConditions: any[] = [
+            {
+                targetType: "audio",
+                targetId: audio.id,
+            },
+        ];
+
+        if (relatedCommentIds.length > 0) {
+            orConditions.push({
+                targetType: "comment",
+                targetId: { [Op.in]: relatedCommentIds },
+            });
+        }
+
+        whereClause[Op.or] = orConditions;
+
+        await Notification.update(
+            { readAt: new Date() },
+            { where: whereClause },
+        );
+    }
+
+    const sortedComments = Comment.constructThreads(comments);
+    const canEdit = Boolean(
+        viewer && (viewer.isAdmin || viewer.id === audio.userId),
+    );
+    const edits = canEdit
+        ? await AudioEdit.findAll({
+              where: { audioId: audio.id },
+              include: [{ model: User, as: "editor" }],
+              order: [["createdAt", "DESC"]],
+          })
+        : [];
+    const userEditCount = edits.filter((edit) => !edit.isAdminEdit).length;
 
     const nextAudio = await Audio.findOne({
         where: {
@@ -120,11 +162,131 @@ export const load: PageServerLoad = async (event) => {
         mimeType: audio.mimeType,
         isFollowing,
         nextAudioId: nextAudio ? nextAudio.id : null,
+        archivedStreamId: audio.archivedStreamId,
+        archivedStreamChats: audio.archivedStreamId
+            ? await StreamChat.findAll({
+                  where: { streamId: audio.archivedStreamId },
+                  include: { model: User },
+                  order: [["createdAt", "ASC"]],
+              }).then((chats) => chats.map((c) => c.toClientside()))
+            : null,
         isSubscribed,
+        canEdit,
+        hasEdits: Boolean(viewer?.isAdmin && edits.length > 0),
+        remainingEdits: viewer?.isAdmin
+            ? null
+            : Math.max(0, MAX_USER_AUDIO_EDITS - userEditCount),
+        edits: edits.map((edit) => ({
+            id: edit.id,
+            previousTitle: edit.previousTitle,
+            previousDescription: edit.previousDescription,
+            newTitle: edit.newTitle,
+            newDescription: edit.newDescription,
+            isAdminEdit: edit.isAdminEdit,
+            restoredEditId: edit.restoredEditId,
+            createdAt: edit.createdAt.toISOString(),
+            editor: edit.editor?.toClientside(),
+        })),
     };
 };
 
 export const actions: Actions = {
+    revertEdit: async (event) => {
+        const user = event.locals.user;
+        if (!user || !user.isAdmin) {
+            return error(403, "Forbidden");
+        }
+        const form = await event.request.formData();
+        const editId = form.get("editId");
+        if (typeof editId !== "string" || !editId) {
+            return error(400, "Missing edit id");
+        }
+
+        const edit = await AudioEdit.findByPk(editId);
+        if (!edit || edit.audioId !== event.params.id) {
+            return error(404, "Edit not found");
+        }
+
+        await updateAudioDetails(
+            edit.audioId,
+            user,
+            edit.previousTitle,
+            edit.previousDescription,
+            edit.id,
+        );
+        return { revertSuccess: true };
+    },
+    edit: async (event) => {
+        const user = event.locals.user;
+        const audio = await Audio.findByPk(event.params.id);
+        if (!audio) {
+            return error(404, "Not found");
+        }
+        if (!user || (!user.isAdmin && user.id !== audio.userId)) {
+            return error(403, "Forbidden");
+        }
+        if (!user.isAdmin && (user.isBanned || !user.isVerified)) {
+            return error(403, "Forbidden");
+        }
+
+        const form = await event.request.formData();
+        const titleValue = form.get("title");
+        const descriptionValue = form.get("description");
+        const title = typeof titleValue === "string" ? titleValue.trim() : "";
+        const description =
+            typeof descriptionValue === "string" ? descriptionValue : "";
+
+        if (title.length < 3 || title.length > 120) {
+            return fail(400, {
+                editMessage: "Title must be between 3 and 120 characters",
+            });
+        }
+        if (description.length > 5000) {
+            return fail(400, {
+                editMessage: "Description must not exceed 5000 characters",
+            });
+        }
+
+        try {
+            const edit = await updateAudioDetails(
+                audio.id,
+                user,
+                title,
+                description,
+            );
+            if (!edit) {
+                return fail(400, { editMessage: "No changes were made" });
+            }
+        } catch (err) {
+            if (err instanceof AudioEditLimitError) {
+                return fail(403, {
+                    editMessage: "You have reached the limit of 3 edits",
+                });
+            }
+            if (err instanceof AudioNotFoundError) {
+                return error(404, "Not found");
+            }
+            throw err;
+        }
+
+        return { editSuccess: true };
+    },
+    setAnnouncement: async (event) => {
+        const user = event.locals.user;
+        if (!user || !user.isAdmin) {
+            return error(403, "Forbidden");
+        }
+        const audio = await Audio.findByPk(event.params.id);
+        if (!audio) {
+            return error(404, "Not found");
+        }
+        const form = await event.request.formData();
+        // The button posts the state it wants, so the action stays idempotent
+        // and a double submit cannot flip it back.
+        audio.isAnnouncement = form.get("isAnnouncement") === "on";
+        await audio.save();
+        return { announcementSuccess: true };
+    },
     delete: async (event) => {
         const user = event.locals.user;
         const audio = await Audio.findByPk(event.params.id, { include: User });
@@ -147,24 +309,129 @@ export const actions: Actions = {
     },
     add_comment: async (event) => {
         const user = event.locals.user;
-        if (!user || user.isBanned) {
+        if (!user || !user.isVerified || user.isBanned) {
             return error(403, "Forbidden");
         }
-        const data = await event.request.formData();
-        const content = data.get("comment") as string;
-        const parentId = data.get("parentId") as string | null;
 
-        if (!content || content.trim() === "") {
-            return error(400, "Comment content cannot be empty");
+        const audio = await Audio.findByPk(event.params.id);
+        if (!audio) {
+            return error(404, "Not found");
         }
 
-        await Comment.create({
-            content: content.trim(),
+        const form = await event.request.formData();
+        const parentId = form.get("parentId") as string | null;
+        const comment = form.get("comment") as string;
+        if (!comment) {
+            return fail(400, { comment });
+        }
+        if (comment.length < 3 || comment.length > 4000) {
+            return fail(400, {
+                comment,
+                message: "Comment must be between 3 and 4000 characters",
+            });
+        }
+
+        const commentInDatabase = await Comment.create({
             userId: user.id,
-            audioId: event.params.id,
-            parentId: parentId || null,
+            audioId: audio.id,
+            parentId,
+            content: comment,
         });
 
+        // Send notifications to followers
+        const followers = await AudioFollow.findAll({
+            where: { audioId: audio.id } as any,
+        });
+        const followerIds = new Set<string>(followers.map((f) => f.userId));
+        if (audio.userId) followerIds.add(audio.userId);
+        followerIds.delete(user.id);
+        const payloads = Array.from(followerIds).map((uid) => ({
+            userId: uid,
+            actorId: user.id,
+            type: "comment" as const,
+            targetType: "comment" as const,
+            targetId: commentInDatabase.id,
+            metadata: { audioId: audio.id },
+        }));
+        if (payloads.length) {
+            await Notification.bulkCreate(payloads as any, { individualHooks: true });
+        }
+
+        return { success: true };
+    },
+    reply_to_comment: async ({ request }) => {
+        const form = await request.formData();
+        const parentId = form.get("parentId") as string;
+        const parentComment = await Comment.findByPk(parentId, {
+            include: User,
+        });
+
+        if (!parentComment) {
+            return error(404, "The comment you are replying to was not found");
+        }
+        return {
+            replyTo: parentComment.toClientside(false),
+        };
+    },
+    delete_comment: async (event) => {
+        // Only an admin, or the user who made the comment can delete a comment
+        const user = event.locals.user;
+        const form = await event.request.formData();
+        const commentId = form.get("id") as string;
+        if (!commentId) {
+            return fail(400);
+        }
+
+        const comment = await Comment.findByPk(commentId, { include: User });
+        if (!comment) {
+            return error(404, "Not found");
+        }
+
+        // You must be an admin or the comment owner to delete
+        if (!user || (!user.isAdmin && user.id !== comment.userId)) {
+            return error(403, "Forbidden");
+        }
+
+        // We should be able to use mixin methods here, but even after declaring their types
+        // explicitly, they just don't work.
+        const replyCount = await Comment.count({
+            where: { parentId: comment.id },
+        });
+        if (replyCount > 0) {
+            // Comment cannot be deleted, clear its content instead
+            comment.content = "[deleted]";
+            await comment.save();
+            return { success: true };
+        }
+
+        // Otherwise we can just delete it
+        await comment.destroy();
+        return { success: true };
+    },
+    follow: async (event) => {
+        const user = event.locals.user;
+        if (!user || !user.isVerified || user.isBanned)
+            return error(403, "Forbidden");
+        const audio = await Audio.findByPk(event.params.id);
+        if (!audio) return error(404, "Not found");
+        if (audio.userId === user.id) return { success: true };
+        const existing = await AudioFollow.findOne({
+            where: { userId: user.id, audioId: audio.id } as any,
+        });
+        if (!existing) {
+            await AudioFollow.create({ userId: user.id, audioId: audio.id });
+        }
+        return { success: true };
+    },
+    unfollow: async (event) => {
+        const user = event.locals.user;
+        if (!user || !user.isVerified || user.isBanned)
+            return error(403, "Forbidden");
+        const audio = await Audio.findByPk(event.params.id);
+        if (!audio) return error(404, "Not found");
+        await AudioFollow.destroy({
+            where: { userId: user.id, audioId: audio.id } as any,
+        });
         return { success: true };
     },
     favorite: async (event) => {
@@ -187,4 +454,6 @@ export const actions: Actions = {
         await AudioFavorite.removeFavorite(user.id, audio.id);
         return { success: true };
     },
+    subscribe,
+    unsubscribe,
 };

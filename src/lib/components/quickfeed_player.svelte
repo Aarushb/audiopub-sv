@@ -548,6 +548,10 @@
             if (!contextReady) {
                 return false;
             }
+            const context = audioContext;
+            if (!context) {
+                return false;
+            }
             
             if (audioPool.length === 0) {
                 initializeAudioPool();
@@ -627,18 +631,14 @@
                 // Crossfade mode: start with volume 0 and filters ready
                 newSlot.fadeType = 'in';
                 newSlot.filterNode.type = 'highpass';
-                if (audioContext) {
-                    newSlot.filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
-                    newSlot.gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-                }
+                newSlot.filterNode.frequency.setValueAtTime(20000, context.currentTime);
+                newSlot.gainNode.gain.setValueAtTime(0, context.currentTime);
             } else {
                 // Direct play mode: set up for immediate play
                 newSlot.fadeType = null;
                 newSlot.filterNode.type = 'lowpass';
-                if (audioContext) {
-                    newSlot.filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
-                    newSlot.gainNode.gain.setValueAtTime(1, audioContext.currentTime);
-                }
+                newSlot.filterNode.frequency.setValueAtTime(20000, context.currentTime);
+                newSlot.gainNode.gain.setValueAtTime(1, context.currentTime);
             }
             
             // Step 7: Start playback and wait for actual audio output
@@ -1277,11 +1277,11 @@
             case 's':
             case 'S':
                 if (browser) {
-                    const activeAudioId = audios[currentIndex]?.id || '';
-                    if (navigator.share) {
-                        navigator.share({url: `/listen/${activeAudioId}`});
-                    } else if (navigator.clipboard) {
-                        navigator.clipboard.writeText(window.location.origin + `/listen/${activeAudioId}`);
+                    const audioToShare = audios[currentIndex];
+                    if (audioToShare && navigator.share) {
+                        navigator.share({url: `/listen/${audioToShare.id}`});
+                    } else if (audioToShare && navigator.clipboard) {
+                        navigator.clipboard.writeText(window.location.origin + `/listen/${audioToShare.id}`);
                     }
                 }
                 break;
@@ -1759,7 +1759,7 @@
                     {#if currentAudio.comments && currentAudio.comments.length > 0}
                         <CommentList 
                             comments={currentAudio.comments} 
-                            user={currentUser || undefined} 
+                            user={currentUser ?? undefined}
                             isAdmin={false}
                         />
                     {:else}
@@ -1776,8 +1776,12 @@
                                     // Let SvelteKit handle its updates first
                                     await update();
                                     
-                                    if (result.type === 'success' && result.data?.comment) {
-                                        console.log('✅ Comment posted successfully:', result.data.comment);
+                                    const newComment = result.type === 'success'
+                                        ? result.data?.comment as ClientsideComment | undefined
+                                        : undefined;
+
+                                    if (newComment) {
+                                        console.log('✅ Comment posted successfully:', newComment);
                                         
                                         // Ensure comments array exists
                                         if (!audios[currentIndex].comments) {
@@ -1787,7 +1791,7 @@
                                         // Add the new comment to local state with proper reactivity
                                         audios[currentIndex] = {
                                             ...audios[currentIndex],
-                                            comments: [...(audios[currentIndex].comments || []), result.data.comment as ClientsideComment]
+                                            comments: [...(audios[currentIndex].comments || []), newComment]
                                         };
                                         
                                         // Trigger reactivity explicitly
@@ -2271,16 +2275,6 @@
         margin-top: auto;
         padding-top: 1rem;
         border-top: 1px solid #eee;
-    }
-
-    .comment-form .warning {
-        background: #fff3cd;
-        border: 1px solid #ffeaa7;
-        color: #856404;
-        padding: 0.5rem;
-        border-radius: 0.25rem;
-        margin-bottom: 0.5rem;
-        font-size: 0.9rem;
     }
 
     .comment-form textarea {

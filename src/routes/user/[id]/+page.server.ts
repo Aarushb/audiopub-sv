@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-import { Audio, Comment, User, Playlist, Stream } from "$lib/server/database";
+import { Audio, Comment, User, Playlist, Stream, AudioFavorite } from "$lib/server/database";
 import { error, redirect } from "@sveltejs/kit";
 import { Op } from "sequelize";
 import type { Actions, PageServerLoad } from "./$types";
@@ -79,6 +79,21 @@ export const load: PageServerLoad = async (event) => {
     if (tab === "archives") activeCount = archivesData.count;
     if (tab === "playlists") activeCount = playlistsData.count;
 
+    const withFavoriteCounts = async (rows: Audio[]) =>
+        Promise.all(
+            rows.map(async (audio) => {
+                const favoriteCount = await AudioFavorite.count({
+                    where: { audioId: audio.id },
+                });
+                return audio.toClientside(true, favoriteCount);
+            }),
+        );
+
+    const [clips, archives] = await Promise.all([
+        withFavoriteCounts(clipsData.rows),
+        withFavoriteCounts(archivesData.rows),
+    ]);
+
     const user = event.locals.user;
     let isSubscribed = false;
     if (user) {
@@ -90,8 +105,8 @@ export const load: PageServerLoad = async (event) => {
 
     return {
         tab,
-        clips: clipsData.rows.map((audio) => audio.toClientside()),
-        archives: archivesData.rows.map((audio) => audio.toClientside()),
+        clips,
+        archives,
         playlists: playlistsData.rows.map((playlist) => playlist.toClientside(true, true)),
         stream: activeStream?.toClientside(false) ?? null,
         subscribers: subscribersCount,

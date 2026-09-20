@@ -81,6 +81,8 @@ export interface ClientsideAudio {
     isFavorited?: boolean;
     isLiveArchive?: boolean;
     createdAt: number;
+    /** Admin-authored notice pinned to the top of the upload page. */
+    isAnnouncement: boolean;
     user?: ClientsideUser;
     comments?: ClientsideComment[];
     playlists?: { id: string; name: string }[];

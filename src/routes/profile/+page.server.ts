@@ -18,7 +18,7 @@
  */
 import { fail, redirect, type Actions } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
-import { User, Audio, Playlist } from "$lib/server/database";
+import { User, Audio, Playlist, AudioFavorite } from "$lib/server/database";
 import { hash } from "bcrypt";
 import { v4 as uuidv4 } from "uuid";
 import { Op } from "sequelize";
@@ -66,6 +66,21 @@ export const load: PageServerLoad = async (event) => {
     if (tab === "archives") activeCount = archivesData.count;
     if (tab === "playlists") activeCount = playlistsData.count;
 
+    const withFavoriteCounts = async (rows: Audio[]) =>
+        Promise.all(
+            rows.map(async (audio) => {
+                const favoriteCount = await AudioFavorite.count({
+                    where: { audioId: audio.id },
+                });
+                return audio.toClientside(true, favoriteCount);
+            }),
+        );
+
+    const [clips, archives] = await Promise.all([
+        withFavoriteCounts(clipsData.rows),
+        withFavoriteCounts(archivesData.rows),
+    ]);
+
     return {
         name: user.name,
         email: user.email,
@@ -73,8 +88,8 @@ export const load: PageServerLoad = async (event) => {
         bio: user.bio,
         streamKey: user.streamKey,
         tab,
-        clips: clipsData.rows.map((audio) => audio.toClientside()),
-        archives: archivesData.rows.map((audio) => audio.toClientside()),
+        clips,
+        archives,
         playlists: playlistsData.rows.map((playlist) => playlist.toClientside(true, true)),
         count: activeCount,
         page,

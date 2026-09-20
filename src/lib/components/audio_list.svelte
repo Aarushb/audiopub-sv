@@ -4,14 +4,12 @@
   Copyright (C) 2025 the-byte-bender
 -->
 <script lang="ts">
-    import type { ClientsideAudio, ClientsideUser } from "$lib/types";
-    import SafeMarkdown from "./safe_markdown.svelte";
+    import type { ClientsideAudio } from "$lib/types";
     import AudioItem from "./audio_item.svelte";
     import { onMount } from "svelte";
 
     export let audios: ClientsideAudio[];
     export let groupThreshold: number = 3;
-    export let currentUser: ClientsideUser | null = null;
 
     export let paginationBaseUrl: string = "/";
     export let page: number = 1;
@@ -124,15 +122,44 @@
 </script>
 
 <section class="audio-list">
-    {#each audios as audio, index (audio.id)}
-        <AudioItem
-            bind:this={itemComponents[audio.id]}
-            {audio}
-            {currentUser}
-            onEnded={() => handleTrackEnded(index)}
-            onNext={() => handleNextTrack(index)}
-            onPrev={() => handlePrevTrack(index)}
-        />
+    {#each processedList as item (item.id)}
+        {#if "isGroup" in item}
+            <div class="audio-group">
+                <h4>
+                    <button
+                        class="expand-button"
+                        on:click={() => toggleGroup(item.id)}
+                        aria-expanded={expandedGroups.get(item.id)
+                            ? "true"
+                            : "false"}
+                    >
+                        And {item.audios.length} more by {item.user.displayName}
+                    </button>
+                </h4>
+                {#if expandedGroups.get(item.id)}
+                    {#each item.audios as audio (audio.id)}
+                        <AudioItem
+                            bind:this={itemComponents[audio.id]}
+                            {audio}
+                            {currentUser}
+                            onEnded={() => handleTrackEnded(audios.findIndex((a) => a.id === audio.id))}
+                            onNext={() => handleNextTrack(audios.findIndex((a) => a.id === audio.id))}
+                            onPrev={() => handlePrevTrack(audios.findIndex((a) => a.id === audio.id))}
+                        />
+                    {/each}
+                {/if}
+            </div>
+        {:else}
+            {@const audio = item}
+            <AudioItem
+                bind:this={itemComponents[audio.id]}
+                {audio}
+                {currentUser}
+                onEnded={() => handleTrackEnded(audios.findIndex((a) => a.id === audio.id))}
+                onNext={() => handleNextTrack(audios.findIndex((a) => a.id === audio.id))}
+                onPrev={() => handlePrevTrack(audios.findIndex((a) => a.id === audio.id))}
+            />
+        {/if}
     {/each}
 </section>
 
@@ -155,33 +182,6 @@
 {/if}
 
 <style>
-    .audio-list-controls {
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        margin-bottom: 12px;
-        padding: 8px 12px;
-        background-color: #f5f5f5;
-        border-radius: 6px;
-        border: 1px solid #e0e0e0;
-    }
-
-    .autoplay-toggle {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-weight: bold;
-        color: #333;
-        cursor: pointer;
-        user-select: none;
-    }
-
-    .autoplay-toggle input[type="checkbox"] {
-        width: 18px;
-        height: 18px;
-        cursor: pointer;
-    }
-
     .audio-list {
         margin-top: 10px;
     }

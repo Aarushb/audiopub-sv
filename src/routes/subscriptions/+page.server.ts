@@ -1,4 +1,4 @@
-import { Audio, Stream, User } from "$lib/server/database";
+import { Audio, AudioFavorite, Stream, User } from "$lib/server/database";
 import Subscription from "$lib/server/database/models/subscription";
 import { redirect, type ServerLoad } from "@sveltejs/kit";
 import { Op } from "sequelize";
@@ -26,7 +26,13 @@ export const load: ServerLoad = async (event) => {
         offset,
         order: [["createdAt", "DESC"]],
         include: User
-    });    
+    });
+
+    let clientsideAudios = [];
+    for (const audio of audios.rows) {
+        const favoriteCount = await AudioFavorite.count({ where: { audioId: audio.id } });
+        clientsideAudios.push(audio.toClientside(true, favoriteCount));
+    }
 
     return {
         streams:
@@ -39,7 +45,7 @@ export const load: ServerLoad = async (event) => {
                       })
                   ).map((s) => s.toClientside(true))
                 : [],
-        audios: audios.rows.map((audio) => audio.toClientside()),
+        audios: clientsideAudios,
         count: audios.count,
         page,
         limit,

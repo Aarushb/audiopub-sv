@@ -16,28 +16,20 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-import { v4 as uuidv4 } from "uuid";
-import type { PageServerLoad } from "./$types";
+import { env } from "$env/dynamic/public";
 
-export const load: PageServerLoad = async (event) => {
-    const user = event.locals.user;
+// The public address of the icecast server, as seen by listeners and by
+// broadcasters. This is not the same as `ICECAST_HOST`, which is the address
+// the server itself uses to reach icecast, and is usually not reachable from
+// the outside.
 
-    if (user) {
-        if (!user.streamKey) {
-            user.streamKey = uuidv4();
-            await user.save();
-        }
+// Base URL listeners play a stream from. The mount point, which is the user
+// id, is appended to it.
+export const streamListenUrl = (
+    env.PUBLIC_STREAM_LISTEN_URL || "https://live.audiopub.site"
+).replace(/\/+$/, "");
 
-        return {
-            user: {
-                id: user.id,
-                name: user.name,
-                streamKey: user.streamKey,
-            },
-        };
-    }
-
-    return {
-        user: null,
-    };
-};
+// Host and port broadcasting software sends audio to.
+export const streamIngestHost =
+    env.PUBLIC_STREAM_INGEST_HOST || "live.audiopub.site";
+export const streamIngestPort = env.PUBLIC_STREAM_INGEST_PORT || "8000";

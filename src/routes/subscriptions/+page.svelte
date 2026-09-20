@@ -24,7 +24,6 @@
     audios={data.audios}
     page={data.page}
     totalPages={data.totalPages}
-    currentUser={data.user}
     paginationBaseUrl="/subscriptions"
     groupThreshold={0}
 />

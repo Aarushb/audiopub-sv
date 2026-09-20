@@ -29,6 +29,7 @@ import {
     BelongsTo,
     CreatedAt,
     UpdatedAt,
+    AfterCreate,
 } from "sequelize-typescript";
 import User from "./user";
 import Audio from "./audio";
@@ -40,6 +41,8 @@ import {
     type ClientsideResolvedNotification,
 } from "$lib/types";
 import Stream from "./stream";
+import dotenv from "dotenv";
+dotenv.config()
 
 @Table
 export default class Notification extends Model {
@@ -216,5 +219,75 @@ export default class Notification extends Model {
             targetId: null,
             metadata: { message, ...metadata },
         } as any);
+    }
+
+    @AfterCreate
+    static async sendPushNotification(notification: Notification) {
+        if (notification.type == NotificationType.system) return;
+
+        const [resolvedNotification] = await this.resolveMany([notification]);
+
+        let title = "";
+        let message = "";
+
+        if (resolvedNotification.type == NotificationType.comment && resolvedNotification.target) {
+            const comment = resolvedNotification.target as ClientsideComment;
+
+            title = `${resolvedNotification.actor?.displayName} commented on ${comment.audio?.title}`;
+            message = comment.content;
+        } else if (resolvedNotification.type == NotificationType.favorite && resolvedNotification.target) {
+            const audio = resolvedNotification.target as ClientsideAudio;
+
+            title = `${resolvedNotification.actor?.displayName} favorited ${audio.title}`
+        } else if (resolvedNotification.type == NotificationType.upload && resolvedNotification.targetType == NotificationTargetType.audio) {
+            const audio = resolvedNotification.target as ClientsideAudio;
+
+            title = `${resolvedNotification.actor?.displayName} uploaded a new audio`;
+            message = audio.title;
+        } else if (resolvedNotification.type == NotificationType.upload && resolvedNotification.targetType == NotificationTargetType.stream) {
+            const stream = resolvedNotification.target as ClientsideStream;
+
+            title = `${resolvedNotification.actor?.displayName} went live!`;
+            message = stream.title;
+        }
+
+        const user = await User.findOne({ where: { id: resolvedNotification.userId } });
+        if (!user || !user.notificationKey) return;
+
+        if (process.env.NO_PUSH_NOTIFICATIONS) {
+            console.log(`New notification for ${user.displayName}, ID ${user.id}\nTitle: ${title}\nMessage: ${message}`);
+            return;
+        }
+
+        const response = await fetch(
+            "https://api.onesignal.com/notifications?c=push",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Key ${process.env.ONE_SIGNAL_API_KEY}`,
+                },
+                body: JSON.stringify({
+                    app_id: process.env.PUBLIC_ONE_SIGNAL_APP_ID,
+                    target_channel: "push",
+
+                    include_aliases: {
+                        external_id: [
+                            user.notificationKey
+                        ],
+                    },
+
+                    headings: {
+                        en: title,
+                    },
+
+                    contents: {
+                        en: message,
+                    },
+                }),
+            }
+        );
+
+        if (!response.ok) console.error(`${response.status} ${await response.text()}`)
     }
 }

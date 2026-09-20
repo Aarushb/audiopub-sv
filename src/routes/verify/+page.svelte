@@ -43,6 +43,7 @@
 
     <div class="form-group">
         <label for="token">Verification token</label>
+        <!-- svelte-ignore a11y-autofocus (intentional primary form focus from PR #7) -->
         <input
             type="text"
             id="token"

@@ -43,6 +43,7 @@
     <input type="hidden" name="token" value={data.token} />
     <div class="form-group">
         <label for="password">New password</label>
+        <!-- svelte-ignore a11y-autofocus (intentional primary form focus from PR #7) -->
         <input
             type="password"
             id="password"

@@ -20,7 +20,7 @@ import fs from "fs/promises";
 import path from "path";
 import { error, fail, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
-import { Audio, Playlist, PlaylistAudio, Notification, Subscription } from "$lib/server/database";
+import { Audio, Playlist, PlaylistAudio, Notification, Subscription, User } from "$lib/server/database";
 import transcode from "$lib/server/transcode";
 import { NotificationTargetType, NotificationType } from "$lib/types";
 
@@ -37,9 +37,21 @@ export const load: PageServerLoad = async (event) => {
 
     const isLive = event.url.searchParams.get("type") === "live";
 
+    // Admin notices are pinned above the form so uploaders read them before
+    // submitting anything.
+    const announcements = await Audio.findAll({
+        where: { isAnnouncement: true, hasFile: true },
+        include: [User],
+        order: [["createdAt", "DESC"]],
+    });
+
     return {
         playlists: playlists.map((p) => p.toClientside(false, false)),
         isLive,
+        announcements: announcements.map((audio) => ({
+            ...audio.toClientside(),
+            mimeType: audio.mimeType,
+        })),
     };
 };
 
@@ -72,6 +84,9 @@ export const actions: Actions = {
         const description = (data.get("description") as string) || "";
         const isLiveArchive = data.get("isLiveArchive") === "true";
         const playlistIds = data.getAll("playlistIds") as string[];
+        // Only admins may pin an audio; the checkbox is not rendered for others
+        // and is ignored here even if it is forged.
+        const isAnnouncement = user.isAdmin && data.get("isAnnouncement") === "on";
 
         if (!file || !title) {
             return fail(400, { title, description });
@@ -90,6 +105,7 @@ export const actions: Actions = {
             userId: user.id,
             extension: path.extname(file.name),
             isLiveArchive,
+            isAnnouncement,
         });
 
         await fs.mkdir(path.dirname(audio.path), { recursive: true });
