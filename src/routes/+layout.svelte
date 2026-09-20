@@ -159,18 +159,6 @@
                 </p>
                 <a href="/verify">Verify</a>
             {:else}
-                <a href="/subscriptions">Subscriptions</a>
-                <a href="/notifications" class="notifications-link">
-                    Notifications
-                    {#if unreadCount > 0}
-                        <span
-                            class="badge"
-                            aria-label={`${unreadCount} unread notifications`}
-                            >{unreadCount}</span
-                        >
-                    {/if}
-                </a>
-                <a href="/favorites">Favorites</a>
                 <details class="create-menu">
                     <summary class="create-summary">Create</summary>
                     <div class="create-dropdown">
@@ -179,11 +167,37 @@
                         <a href="/playlist/create">Make Playlist</a>
                     </div>
                 </details>
-                <a href="/profile">Profile</a>
                 {#if data.user.isAdmin}
                     <a href="/admin">Admin Panel</a>
                 {/if}
-                <a href="/logout">Logout</a>
+                <details class="create-menu">
+                    <summary class="create-summary">
+                        {data.user.name}
+                        {#if unreadCount > 0}
+                            <span
+                                class="badge"
+                                aria-label={`${unreadCount} unread notifications`}
+                                >{unreadCount} {unreadCount === 1 ? "notification" : "notifications"}</span
+                            >
+                        {/if}
+                    </summary>
+                    <div class="create-dropdown">
+                        <a href="/subscriptions">Subscriptions</a>
+                        <a href="/notifications" class="notifications-link">
+                            Notifications
+                            {#if unreadCount > 0}
+                                <span
+                                    class="badge"
+                                    aria-label={`${unreadCount} unread notifications`}
+                                    >{unreadCount}</span
+                                >
+                            {/if}
+                        </a>
+                        <a href="/favorites">Favorites</a>
+                        <a href="/profile">Profile</a>
+                        <a href="/logout">Logout</a>
+                    </div>
+                </details>
             {/if}
         {:else}
             <a href="/login">Login</a>
