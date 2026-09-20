@@ -547,3 +547,93 @@ still closed. No console errors from the interaction.
 The "keep sweeping for other bugs" directive remains active and
 unfinished — continuing to look for regressions beyond the two items
 above.
+
+## 2026-09-20 — Merged upstream's new mute feature
+
+Upstream (the-byte-bender/audiopub-sv) shipped a user-mute feature (PR #41,
+`df7ebb3` + a follow-up fix `4812388`) since our last sync at `f4edaf1`.
+Fetched and merged `upstream/main` into this branch. Merge base was
+confirmed to be exactly `f4edaf1` (our last reconciliation point), so the
+only real changes to reconcile were the mute feature's own 21 touched
+files, not the full historical divergence.
+
+### Conflicts resolved (8 files)
+
+- `src/lib/server/database/index.ts` — union: added `UserMute` to the
+  models/exports list alongside our `Playlist`/`PlaylistAudio`.
+- `src/routes/+page.server.ts` — combined our clips/archives/playlists
+  filter logic with upstream's `getMutedUserIds`/`excludeMutedUsers`
+  exclusion. Also extended mute filtering to the playlists query and the
+  live-streams query, since upstream has no playlists feature to have
+  applied it to themselves — muting is documented as hiding "uploads and
+  live streams," and playlists are exactly the kind of feed content this
+  branch added, so leaving them exempt from mutes would have been an
+  inconsistency, not a deliberate design choice.
+- `src/routes/listen/[id]/+page.server.ts` — union of our playlist-aware
+  next/prev logic with upstream's `isMuted`/`canBeMutedByUser` load-time
+  values and `mute`/`unmute` actions. **Caught a silent merge defect**: git
+  auto-merged (no conflict markers) a block from upstream that referenced
+  a local variable `user`, but our version of this function only declares
+  the equivalent value as `viewer` — `user` was never declared in the
+  merged result, which would have been a runtime `ReferenceError` on every
+  single clip page load. Fixed by using `viewer` instead of re-declaring.
+  Caught by reading the merged file in full rather than trusting a clean
+  auto-merge to mean a correct one.
+- `src/routes/listen/[id]/+page.svelte` — combined our `targetUserId`-
+  passing `SubscribeButton` call with upstream's `{#if !data.isMuted}` /
+  `{#if data.canBeMutedByUser}` gating and `<MuteButton>`, keeping the
+  button block outside the `<p>` (per the earlier hydration-mismatch fix).
+- `src/routes/search/+page.server.ts` — this one didn't auto-merge at all
+  (whole-file conflict), so it was rewritten by hand: kept our three
+  search modes (`playlist:`/`live:`/standard prefixes) and rebuilt each
+  branch to also apply upstream's `mutesApply`/`hiddenByMutes` logic,
+  including extending it to the playlist-search branch for the same
+  reason as the homepage above.
+- `src/routes/search/+page.svelte` — same whole-file conflict; rebuilt
+  keeping our three-searchType template and `getTitle()`/`<svelte:head>`
+  title pattern (upstream's version of this file still used the old
+  broken module-level `title` store this session already fixed
+  everywhere else — taking it as-is would have reintroduced the
+  cross-request title-leakage bug on this one page), plus upstream's
+  mute-notice banner.
+- `src/routes/user/[id]/+page.server.ts` / `+page.svelte` — same pattern
+  as the listen page: union the return fields / imports, gate
+  `SubscribeButton` behind `!data.isMuted`, add `<MuteButton>`. The
+  `.svelte` conflict also had upstream re-introducing the old stale
+  `import title from "$lib/title.js"` + `onMount` pattern with a
+  duplicate `export let data` — dropped in favor of our existing
+  `getTitle()` line already outside the conflict markers.
+
+### Non-conflicting files double-checked
+
+Went through every file the merge touched without a conflict (`decs.d.ts`,
+`notifications/+page.server.ts` and `+server.ts`, `profile/+page.svelte`,
+`quickfeed/+page.server.ts` and `api/+server.ts`, the new
+`mutes/+page.server.ts`/`+page.svelte`, `mute_button.svelte`,
+`user_mute.ts`, `mutes.ts`, the migration) to make sure a clean auto-merge
+hadn't hidden another defect the way the listen-page one did. Found one:
+the new `src/routes/mutes/+page.svelte` (upstream-authored, never touched
+by us before) still used the old `import title from "$lib/title"` +
+`onMount` pattern — `npm run check` caught it immediately as a type error
+since `title.ts` no longer has a default export. Fixed to match the
+`getTitle()`/`<svelte:head>` pattern used everywhere else.
+
+### Verification
+
+`npm run check` — 0 errors, 0 warnings, 1041 files. `npm run build` —
+succeeds. Ran the new migration (`db:migrate`) to create the `UserMutes`
+table locally. Live-tested the full feature in the browser: registered a
+throwaway non-admin account, confirmed the Mute button appears on a
+non-admin's profile/clip but correctly does *not* appear for an admin
+uploader (admins are exempt from muting on both sides, by design),
+submitted a real mute, confirmed the muted user's content disappeared
+from the homepage feed and from `playlist:`-prefixed search with the "1
+result is hidden because you muted the uploader" notice and working
+"Include muted users" toggle-back link, confirmed `/mutes` lists and
+unmutes correctly, then unmuted to leave the test DB clean. Zero console
+errors through the whole flow.
+
+Committed as a single merge commit,
+`merge: pull upstream mute feature into feature/listening-experience-upgrades`,
+plus the `db:migrate` step which needs to be re-run by anyone else pulling
+this branch.
