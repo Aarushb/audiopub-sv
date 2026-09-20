@@ -25,6 +25,31 @@ export interface ClientsideUser {
     isVerified: boolean;
     isTrusted: boolean;
     isAdmin?: boolean;
+    preferences?: ClientsideUserPreferences | null;
+}
+
+export interface ClientsideHomeFilterPreferences {
+    clips: boolean;
+    archives: boolean;
+    playlists: boolean;
+    sort: string;
+    order: string;
+}
+
+/** Everything except voiceName, which names a specific OS/browser TTS
+ * voice and wouldn't necessarily exist on another device. */
+export interface ClientsideChatReaderPreferences {
+    enabled: boolean;
+    outputMode: "assertive" | "polite" | "voice";
+    pitch: number;
+    rate: number;
+    interrupt: boolean;
+}
+
+export interface ClientsideUserPreferences {
+    autoplay?: boolean;
+    homeFilters?: ClientsideHomeFilterPreferences;
+    chatReader?: ClientsideChatReaderPreferences;
 }
 
 export interface ClientsidePlaylist {

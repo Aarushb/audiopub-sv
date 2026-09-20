@@ -137,6 +137,13 @@ export default class User extends Model {
     @Column(DataType.UUID)
     declare notificationKey: string | null;
 
+    // Device-local settings (autoplay, home filters, chat reader) mirror
+    // into here once a device saves them while logged in, so they follow
+    // the account across devices instead of staying stuck to one browser.
+    @AllowNull(true)
+    @Column(DataType.JSON)
+    declare preferences: any | null;
+
     @CreatedAt
     declare createdAt: Date;
 
@@ -282,6 +289,7 @@ export default class User extends Model {
             isVerified: this.isVerified,
             isTrusted: this.isTrusted,
             isAdmin: this.isAdmin,
+            preferences: this.preferences ?? null,
         };
     }
 
