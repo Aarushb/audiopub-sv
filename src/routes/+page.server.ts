@@ -22,25 +22,68 @@ import type { PageServerLoad } from "./$types";
 import { type OrderItem, Sequelize, Op } from "sequelize";
 import { excludeMutedUsers, getMutedUserIds } from "$lib/server/mutes";
 
+const FILTER_COOKIE_NAME = "audiopub_home_filters";
+
+type SavedFilterPrefs = {
+    clips?: boolean;
+    archives?: boolean;
+    playlists?: boolean;
+    sort?: string;
+    order?: string;
+};
+
+function readSavedFilterPrefs(raw: string | undefined): SavedFilterPrefs {
+    if (!raw) return {};
+    try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+        return {};
+    }
+}
+
 export const load: PageServerLoad = async (event) => {
     const pageString = event.url.searchParams.get("page");
     const page = pageString ? parseInt(pageString, 10) : 1;
-    const sortField = event.url.searchParams.get("sort") || "createdAt";
-    const sortOrder = event.url.searchParams.get("order") || "DESC";
+
+    // A bare link to "/" (the nav's Home link, the logo, etc.) carries no
+    // query params at all, so without this fallback every such navigation
+    // silently reset filters and sort back to the defaults — even though
+    // the user had deliberately chosen something else moments earlier.
+    const savedPrefs = readSavedFilterPrefs(event.cookies.get(FILTER_COOKIE_NAME));
 
     const hasFilterParams =
         event.url.searchParams.has("filter_clips") ||
         event.url.searchParams.has("filter_archives") ||
         event.url.searchParams.has("filter_playlists");
+    const hasSortParams =
+        event.url.searchParams.has("sort") || event.url.searchParams.has("order");
 
-    let filterClips = event.url.searchParams.get("filter_clips") !== "false";
-    let filterArchives = event.url.searchParams.get("filter_archives") !== "false";
-    let filterPlaylists = event.url.searchParams.get("filter_playlists") !== "false";
+    const sortField =
+        event.url.searchParams.get("sort") || savedPrefs.sort || "createdAt";
+    const sortOrder =
+        event.url.searchParams.get("order") || savedPrefs.order || "DESC";
+
+    let filterClips: boolean;
+    let filterArchives: boolean;
+    let filterPlaylists: boolean;
 
     if (hasFilterParams) {
         filterClips = event.url.searchParams.get("filter_clips") === "true";
         filterArchives = event.url.searchParams.get("filter_archives") === "true";
         filterPlaylists = event.url.searchParams.get("filter_playlists") === "true";
+    } else if (
+        savedPrefs.clips !== undefined ||
+        savedPrefs.archives !== undefined ||
+        savedPrefs.playlists !== undefined
+    ) {
+        filterClips = savedPrefs.clips ?? true;
+        filterArchives = savedPrefs.archives ?? true;
+        filterPlaylists = savedPrefs.playlists ?? true;
+    } else {
+        filterClips = true;
+        filterArchives = true;
+        filterPlaylists = true;
     }
 
     // Enforce at least one option checked
@@ -64,6 +107,23 @@ export const load: PageServerLoad = async (event) => {
     const validatedSortOrder = validSortOrders.includes(sortOrder.toUpperCase())
         ? sortOrder.toUpperCase()
         : "DESC";
+
+    // Whenever the request explicitly chose filters or a sort (via the
+    // "Apply Filters" form, or a filtered link), remember that choice so it
+    // survives a later bare navigation back to "/".
+    if (hasFilterParams || hasSortParams) {
+        event.cookies.set(
+            FILTER_COOKIE_NAME,
+            JSON.stringify({
+                clips: filterClips,
+                archives: filterArchives,
+                playlists: filterPlaylists,
+                sort: validatedSortField,
+                order: validatedSortOrder,
+            }),
+            { path: "/", maxAge: 60 * 60 * 24 * 365 },
+        );
+    }
 
     const limit = 30;
     const offset = (page - 1) * limit;
