@@ -53,11 +53,9 @@
     }
 
     onMount(() => {
-        const stored = localStorage.getItem("audiopub_autoplay");
-        if (stored !== null) {
-            autoplayEnabled = stored === "true";
-        }
-
+        // AudioPlayer owns the "audiopub_autoplay" localStorage read/write
+        // and shares this value back up via bind:autoplayEnabled below, so
+        // it doesn't need to be duplicated (and potentially drift) here.
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get("autoplay") === "true") {
             setTimeout(() => {
@@ -246,6 +244,7 @@
     <AudioPlayer
         autofocus
         bind:audioElement
+        bind:autoplayEnabled
         on:play={handlePlay}
         on:ended={handleEnded}
         on:next={handleNext}

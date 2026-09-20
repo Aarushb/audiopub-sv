@@ -49,6 +49,7 @@
                 </h3>
                 <AudioPlayer
                     preload="none"
+                    showAutoplayToggle={false}
                     sources={[
                         { src: `/${announcement.path}`, type: announcement.mimeType },
                         { src: `/${announcement.transcodedPath}`, type: "audio/aac" },

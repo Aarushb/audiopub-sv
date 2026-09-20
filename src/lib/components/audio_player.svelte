@@ -25,6 +25,10 @@
     export let preload: "none" | "metadata" | "auto" = "metadata";
     export let audioElement: HTMLAudioElement | undefined = undefined;
     export let chapters: { time: number }[] = [];
+    // Off by default for players with no "next track" to advance to (e.g. a
+    // preview embed) — toggling it there would still silently change the
+    // site-wide autoplay preference via localStorage for no visible effect.
+    export let showAutoplayToggle = true;
     // When set, playback position for this track is remembered across visits
     // (like YouTube's "continue watching") via localStorage keyed by id.
     export let audioId: string | undefined = undefined;
@@ -44,7 +48,11 @@
     let volume = 1;
     let muted = false;
     let playbackRate = 1;
-    let autoplayEnabled = true;
+    // Bindable so a parent that decides whether to auto-advance on "ended"
+    // (e.g. the listen page) shares this exact value instead of keeping its
+    // own copy that only resyncs on the next full page load — otherwise
+    // toggling the checkbox mid-session has no effect until the next track.
+    export let autoplayEnabled = true;
 
     const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
@@ -425,17 +433,19 @@
             aria-valuetext="{muted ? 0 : volume * 100}%"
         />
 
-        <label class="autoplay-toggle-label" for="player-autoplay">
-            <input
-                type="checkbox"
-                id="player-autoplay"
-                role="switch"
-                aria-checked={autoplayEnabled}
-                checked={autoplayEnabled}
-                on:change={toggleAutoplay}
-            />
-            Autoplay
-        </label>
+        {#if !live && showAutoplayToggle}
+            <label class="autoplay-toggle-label" for="player-autoplay">
+                <input
+                    type="checkbox"
+                    id="player-autoplay"
+                    role="switch"
+                    aria-checked={autoplayEnabled}
+                    checked={autoplayEnabled}
+                    on:change={toggleAutoplay}
+                />
+                Autoplay
+            </label>
+        {/if}
     </div>
 </section>
 
