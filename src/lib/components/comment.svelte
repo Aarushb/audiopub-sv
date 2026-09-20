@@ -86,7 +86,7 @@
 {#if comment.replies && comment.replies.length > 0}
 <details class="replies">
   <summary>{comment.replies.length} {comment.replies.length === 1 ? "reply" : "replies"}</summary>
-  <CommentList comments={comment.replies} {user} {isAdmin} {onReply} label="Replies" />
+  <CommentList comments={comment.replies} {user} {isAdmin} {onReply} label="Replies" isNested />
 </details>
 {/if}
 
