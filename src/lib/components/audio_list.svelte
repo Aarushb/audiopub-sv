@@ -4,12 +4,13 @@
   Copyright (C) 2025 the-byte-bender
 -->
 <script lang="ts">
-    import type { ClientsideAudio } from "$lib/types";
+    import type { ClientsideAudio, ClientsideUser } from "$lib/types";
     import AudioItem from "./audio_item.svelte";
     import { onMount } from "svelte";
 
     export let audios: ClientsideAudio[];
     export let groupThreshold: number = 3;
+    export let currentUser: ClientsideUser | null = null;
 
     export let paginationBaseUrl: string = "/";
     export let page: number = 1;
@@ -171,7 +172,22 @@
                 >Previous</a
             >
         {/if}
-        <span aria-live="polite">Page {page} of {totalPages}</span>
+        <form class="page-jump" method="get" action={paginationBaseUrl.split("?")[0]}>
+            {#each paginationBaseUrl.includes("?") ? paginationBaseUrl.split("?")[1].split("&") : [] as param}
+                {#if param && !param.startsWith("page=")}
+                    {@const [key, value] = param.split("=")}
+                    <input type="hidden" name={key} value={decodeURIComponent(value ?? "")} />
+                {/if}
+            {/each}
+            <label for="page-select">Page</label>
+            <select name="page" id="page-select">
+                {#each Array(totalPages) as _, i}
+                    <option value={i + 1} selected={i + 1 === page}>Page {i + 1}</option>
+                {/each}
+            </select>
+            <span aria-hidden="true">of {totalPages}</span>
+            <button type="submit">Go</button>
+        </form>
         {#if page < totalPages}
             <a
                 href={`${paginationBaseUrl}${paginationQuerySeparator}page=${page + 1}`}
@@ -188,6 +204,12 @@
 
     .pagination {
         margin-top: 20px;
+    }
+
+    .page-jump {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
     }
 
     .pagination a {
