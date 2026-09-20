@@ -254,13 +254,13 @@
             Uploaded by: <a href="/user/@{encodeURIComponent(data.audio.user.name)}"
                 >{data.audio.user.displayName}</a
             >
-            {#if data.user && data.audio.user.id !== data.user.id}
-                <SubscribeButton
-                    targetUserId={data.audio.user.id}
-                    isSubscribed={data.isSubscribed}
-                />
-            {/if}
         </p>
+        {#if data.user && data.audio.user.id !== data.user.id}
+            <SubscribeButton
+                targetUserId={data.audio.user.id}
+                isSubscribed={data.isSubscribed}
+            />
+        {/if}
     {/if}
     <p>Upload date: {new Date(data.audio.createdAt).toLocaleDateString()}</p>
 
