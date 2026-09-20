@@ -83,8 +83,11 @@
   </div>
 </div>
 
-{#if comment.replies}
-<CommentList comments={comment.replies} {user} {isAdmin} {onReply} label="Replies" />
+{#if comment.replies && comment.replies.length > 0}
+<details class="replies">
+  <summary>{comment.replies.length} {comment.replies.length === 1 ? "reply" : "replies"}</summary>
+  <CommentList comments={comment.replies} {user} {isAdmin} {onReply} label="Replies" />
+</details>
 {/if}
 
 <style>
@@ -127,5 +130,16 @@
      (this avoids changing layouts inside nested components like the Modal) */
   .comment #comment-actions > form {
     margin: 0;
+  }
+
+  .comment + .replies {
+    margin-top: 0.5rem;
+    margin-left: 1rem;
+  }
+
+  .comment + .replies > summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: #333;
   }
 </style>
