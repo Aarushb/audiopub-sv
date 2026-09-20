@@ -154,7 +154,7 @@
 
 {#if data.filters.playlists && data.playlists && data.playlists.length > 0}
     <section class="playlists-section">
-        <h3>Playlists</h3>
+        <h2>Playlists</h2>
         <div class="playlists-grid">
             {#each data.playlists as playlist (playlist.id)}
                 <PlaylistItem {playlist} />
