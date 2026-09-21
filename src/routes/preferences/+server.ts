@@ -18,6 +18,8 @@
  */
 import { error, json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
+import { User } from "$lib/server/database";
+import database from "$lib/server/database";
 
 // A fixed allowlist rather than merging the whole request body — an
 // unrecognized key would otherwise sit in the JSON blob forever with no
@@ -25,8 +27,8 @@ import type { RequestHandler } from "./$types";
 const ALLOWED_KEYS = ["autoplay", "homeFilters", "chatReader"] as const;
 
 export const POST: RequestHandler = async (event) => {
-    const user = event.locals.user;
-    if (!user) {
+    const sessionUser = event.locals.user;
+    if (!sessionUser) {
         return error(401, "Forbidden");
     }
 
@@ -42,8 +44,21 @@ export const POST: RequestHandler = async (event) => {
         }
     }
 
-    user.preferences = { ...(user.preferences ?? {}), ...sanitized };
-    await user.save();
+    // Two tabs saving different settings (e.g. one flips autoplay while
+    // another applies home filters) can otherwise race: both read the same
+    // starting JSON, and whichever write commits second silently discards
+    // the other's key. Locking the row for a fresh re-read before merging
+    // — the same pattern already used for audio/comment edit history —
+    // serializes concurrent saves instead of losing one.
+    await database.transaction(async (transaction) => {
+        const user = await User.findByPk(sessionUser.id, {
+            transaction,
+            lock: transaction.LOCK.UPDATE,
+        });
+        if (!user) return;
+        user.preferences = { ...(user.preferences ?? {}), ...sanitized };
+        await user.save({ transaction });
+    });
 
     return json({ success: true });
 };
