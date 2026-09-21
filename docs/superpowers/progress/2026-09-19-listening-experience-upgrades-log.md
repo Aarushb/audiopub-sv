@@ -1182,3 +1182,80 @@ follow-up question to come back to: per-track playback resume position
 different kind of data — one row per track ever played rather than a
 fixed preferences blob — and deserves its own design discussion rather
 than being folded into this JSON column.
+
+## 2026-09-20 — Adversarial edge-case sweep of preferences, and a real bug
+
+Asked directly whether the preferences work above had actually been
+tested adversarially — logged-out attempts, malformed input, interaction
+with other features (mute, admin, banned/unverified accounts) — or just
+the happy path. Honest answer at the time was: solid but not exhaustive.
+Went and did the exhaustive pass rather than asserting it was already
+covered, also confirming the `bio` feature specifically (a separate
+direct question) survived the earlier upstream merge intact — verified
+by actually editing a bio and confirming it rendered on the public
+profile page, since diffing against upstream's current `main` isn't
+meaningful anymore now that upstream has its own unrelated divergence.
+
+**Found a real bug**: two browser tabs (or even two rapid actions in the
+same tab) saving *different* preference keys nearly simultaneously —
+e.g. one flips autoplay while another applies home filters — raced.
+`POST /preferences` read `user.preferences`, merged in its own key, and
+saved, all without any locking; two concurrent requests could both read
+the same starting JSON before either had written, and whichever commit
+landed second silently discarded the other's key entirely. Reproduced it
+directly: fired two concurrent requests with different keys via
+`Promise.all`, and the resulting `Users.preferences` row was missing the
+first request's key completely — not a theoretical race, an actual lost
+update. Fixed by wrapping the read-merge-write in `database.transaction()`
+with `lock: transaction.LOCK.UPDATE` on a fresh `User.findByPk` inside the
+transaction — the exact same pattern `audio_edits.ts`/`comment_edits.ts`
+already use for the same class of contention. Re-ran the identical
+concurrent-write repro (this time with three simultaneous requests across
+all three preference keys) and confirmed all three now land correctly
+with nothing lost.
+
+**Everything else held up clean**, verified rather than assumed:
+- No auth cookie at all → `401`, and the client's `saveAccountPreference`
+  silently no-ops (confirmed zero console errors from a logged-out
+  autoplay toggle, which is still visible/interactive on the listen page
+  for guests).
+- Malformed JSON, a bare string body, and a `null` body → all `400`, no
+  crash.
+- Attempted privilege-escalation payload (`{isAdmin: true, evilKey:
+  "hacked", autoplay: true}`) → confirmed via direct DB read that only
+  `autoplay` landed in the `preferences` JSON blob and the real
+  `Users.isAdmin` column was untouched; the allowlist can't be used to
+  reach any column outside the JSON blob it owns.
+- A deliberately partial account `homeFilters` (just `{sort: "title"}`,
+  missing clips/archives/playlists) → the homepage correctly filled in
+  the missing fields from defaults rather than misbehaving.
+- Bypassing the client-side "at least one filter must stay checked"
+  guard entirely (`?filter_clips=false&filter_archives=false&filter_playlists=false`
+  directly in the URL) → confirmed the server's own validation still
+  corrected it to all-true *before* persisting to the account, so the
+  bypass couldn't get an invalid state saved.
+- Admin account: filters saved and loaded correctly, same as any other
+  account.
+- Unverified account: the nav correctly hides the whole account menu (an
+  unrelated, pre-existing gate, unchanged), but a direct API call still
+  works harmlessly — reasonable, since setting a personal preference
+  isn't a privileged action and doesn't need verification.
+- Banned account: blocked with `403 "You are banned."` — this comes from
+  the existing site-wide hook that rejects every request from a banned
+  user before any route handler runs, so no special-casing was needed in
+  the preferences endpoint itself.
+- Mute feature: muted and unmuted a user while the `preferences` column
+  existed on the same row, confirmed the mute list and mute-filtering
+  both still worked correctly — unrelated model fields, no interference,
+  as expected but verified rather than assumed.
+
+### Verification
+
+`npm run check` — 0 errors, 0 warnings, 1046 files. `npm run build` —
+succeeds. All of the above tested against the real running app (real
+`fetch()` calls, real concurrent requests, real DB reads to confirm
+outcomes), not inferred from reading the code. Committed the race-
+condition fix as `fix: prevent concurrent preference saves from silently
+losing each other's keys`. Test account's admin/banned/verification
+status and `preferences` column all restored to a clean baseline
+afterward.
