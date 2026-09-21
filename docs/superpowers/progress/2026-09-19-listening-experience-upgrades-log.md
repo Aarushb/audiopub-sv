@@ -1259,3 +1259,73 @@ condition fix as `fix: prevent concurrent preference saves from silently
 losing each other's keys`. Test account's admin/banned/verification
 status and `preferences` column all restored to a clean baseline
 afterward.
+
+## 2026-09-20 — Account-synced playback position, with a manual bookmark button
+
+Built the account-based playback-position feature designed earlier in
+this session: a `PlaybackPositions` table (one row per `userId`/`audioId`,
+mirroring `AudioFavorite`), a `playbackAutosave` opt-in preference added
+to the existing `Users.preferences` blob, and a manual "Save my
+place"/"Clear saved position" button that always works regardless of the
+toggle. There is deliberately no `isManual` distinction anywhere in the
+data model — one shared save function is used by every trigger (pause,
+the periodic interval, `beforeunload`, and the manual button); the only
+difference is which triggers are gated behind the autosave toggle
+(automatic ones) versus always allowed (the manual button).
+
+**Backend, adversarially tested before any UI existed** (per the standing
+rule to test edge cases in the same pass, not a follow-up): fired
+malformed bodies, a nonexistent `audioId` (hits the FK constraint,
+returns `404` instead of crashing), and negative/non-numeric/non-finite
+positions at the endpoint directly — all correctly rejected with `400`.
+Confirmed the "only advance" comparison holds under real concurrency: 10
+simultaneous saves to the same untouched track (via `Promise.all`-style
+parallel `curl` requests) landed as exactly one row holding the maximum
+of all ten values, with no duplicate-row race from the unique constraint
+and no lost update — the `database.transaction()` + `lock:
+transaction.LOCK.UPDATE` pattern, plus a `SequelizeUniqueConstraintError`
+catch that falls back to a locked read-modify-write for the create-race
+case, both held up under load. Cross-user isolation confirmed: two
+different accounts saving different positions for the same track produced
+two independent rows, neither affecting the other. The `/preferences`
+allowlist extension for `playbackAutosave` was checked to make sure it
+merges alongside existing keys (`autoplay`) without clobbering them.
+
+**A real bug found and fixed during live UI testing**: the account-sync
+`fetch()` call had no `keepalive` flag. Two of its call sites —
+`beforeunload` and the autoplay-driven navigation that fires on
+`ended` — both start tearing the page down in the same tick the fetch is
+issued, and a browser is free to abort an in-flight `fetch()` when the
+page unloads unless `keepalive: true` is set. This would have silently
+dropped exactly the saves the comment in the code called out as the
+whole point of the unload handler ("playback is most often left mid-track
+by navigating away rather than pausing first"). Fixed by adding
+`keepalive: true` to the one `syncAccountPosition` call shared by every
+trigger.
+
+**UI verified live** in the browser: real audio decode was stalled in
+this session's browser-automation environment (reproduced identically on
+a previously-working, pre-existing track, confirming it's an environment
+limitation and not a regression), so the interaction logic was verified
+directly against the live DOM, component state, and network tab instead
+of via real playback — mocking `duration`/`currentTime` on the real
+`<audio>` element and dispatching real DOM events (`loadedmetadata`,
+`pause`) at it, which still exercises the actual Svelte component code,
+not a simulation of it. Confirmed: the manual button correctly refuses to
+save near the start (announces "too close to the start or end" via its
+own `aria-live` region, matching the site's established self-contained
+announcement pattern) and correctly saves/clears otherwise, updating its
+own label, `localStorage`, and the account row together; restoring from
+an account-side position seeks the `<audio>` element, backfills
+`localStorage` to match, and updates the button label; the autosave
+toggle on the new `/settings` page persists to the account and is read
+back correctly; and the pause-triggered automatic save is correctly
+blocked while the toggle is off and correctly fires once it's on — all
+verified via a mix of DOM state, `localStorage`, real network requests,
+and direct DB reads, not just visual inspection.
+
+### Verification
+
+`npm run check` — 0 errors, 0 warnings, 1052 files. `npm run build` —
+succeeds. All test rows in `PlaybackPositions` and both test accounts'
+`preferences` columns restored to a clean baseline afterward.
