@@ -195,6 +195,7 @@
                         </a>
                         <a href="/favorites">Favorites</a>
                         <a href="/profile">Profile</a>
+                        <a href="/settings">Settings</a>
                         <a href="/logout">Logout</a>
                     </div>
                 </details>
