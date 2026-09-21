@@ -24,7 +24,7 @@ import database from "$lib/server/database";
 // A fixed allowlist rather than merging the whole request body — an
 // unrecognized key would otherwise sit in the JSON blob forever with no
 // code that ever reads it back.
-const ALLOWED_KEYS = ["autoplay", "homeFilters", "chatReader"] as const;
+const ALLOWED_KEYS = ["autoplay", "homeFilters", "chatReader", "playbackAutosave"] as const;
 
 export const POST: RequestHandler = async (event) => {
     const sessionUser = event.locals.user;

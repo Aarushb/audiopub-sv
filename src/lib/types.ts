@@ -50,6 +50,11 @@ export interface ClientsideUserPreferences {
     autoplay?: boolean;
     homeFilters?: ClientsideHomeFilterPreferences;
     chatReader?: ClientsideChatReaderPreferences;
+    /** Opt-in: whether playback position is remembered automatically at
+     * all (locally, and synced to the account when logged in). Off by
+     * default — the manual "Save my place" button works regardless of
+     * this setting, for cherry-picking individual tracks to track. */
+    playbackAutosave?: boolean;
 }
 
 export interface ClientsidePlaylist {

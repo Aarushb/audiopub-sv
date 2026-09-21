@@ -34,6 +34,7 @@ import Subscription from "./models/subscription";
 import AudioEdit from "./models/audio_edit";
 import UserMute from "./models/user_mute";
 import CommentEdit from "./models/comment_edit";
+import PlaybackPosition from "./models/playback_position";
 dotenv.config();
 
 if (
@@ -68,6 +69,7 @@ const database = new Sequelize({
         AudioEdit,
         UserMute,
         CommentEdit,
+        PlaybackPosition,
     ],
     logging: false,
     host: process.env.DATABASE_HOST || "127.0.0.1",
@@ -93,4 +95,5 @@ export {
     AudioEdit,
     UserMute,
     CommentEdit,
+    PlaybackPosition,
 };
