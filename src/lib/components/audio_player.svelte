@@ -44,6 +44,14 @@
     // at mount as the source of truth over this device's own localStorage
     // value — undefined/null (logged out, or never saved) falls back to it.
     export let accountAutoplay: boolean | null | undefined = undefined;
+    // The account's saved position for this track, if any — same
+    // precedence as accountAutoplay (account wins when present, else this
+    // device's localStorage). null means "logged in, nothing saved";
+    // undefined means "logged out" or "not applicable" (no audioId yet).
+    export let accountPosition: number | null | undefined = undefined;
+    // The account's saved autosave preference, same precedence pattern.
+    // Off by default (unlike autoplay) — resuming is opt-in.
+    export let accountAutosave: boolean | null | undefined = undefined;
 
     const dispatch = createEventDispatcher<{
         play: void;
@@ -68,6 +76,21 @@
 
     const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
+    // Opt-in — resuming across sessions is only wired up once a track has
+    // both an audioId and a logged-in or local-history source to resume
+    // from; this stays false until onMount resolves it below.
+    let autosaveEnabled = false;
+    // Drives the manual button's label ("Save my place" vs "Clear saved
+    // position") — kept in sync with whatever's actually stored, whether
+    // that arrived via restore, an automatic save, or the button itself.
+    let hasSavedPosition = false;
+    let statusAnnouncement: HTMLElement | undefined = undefined;
+
+    function announceStatus(message: string) {
+        if (!statusAnnouncement) return;
+        statusAnnouncement.textContent = message;
+    }
+
     // bind:currentTime only resyncs from the "timeupdate" event, which
     // doesn't fire for a programmatic seek while paused — so every seek
     // that isn't the visible slider's own on:input has to update the
@@ -83,28 +106,90 @@
         return `audiopub_playback_${id}`;
     }
 
-    // Don't bother resuming a few seconds from the start, and don't offer a
-    // "resume" that's actually just the tail end of the track.
-    function restorePlaybackPosition() {
-        if (!audioId || !audioElement) return;
-        const saved = localStorage.getItem(playbackPositionKey(audioId));
-        if (!saved) return;
-        const savedTime = parseFloat(saved);
-        if (!isFinite(savedTime) || savedTime < 5) return;
-        const dur = audioElement.duration;
-        if (isFinite(dur) && dur > 0 && savedTime > dur * 0.95) return;
-        setPosition(savedTime);
+    // Don't bother resuming a few seconds from the start. The end-side
+    // threshold is a hybrid rather than a flat percentage: 5% of a 6-hour
+    // live archive is an 18-minute unresumed blind spot, so it's capped at
+    // 60 seconds for anything longer than that.
+    const START_THRESHOLD_SECONDS = 5;
+    const END_THRESHOLD_PERCENT = 0.05;
+    const END_THRESHOLD_CAP_SECONDS = 60;
+
+    function isNearEnd(time: number, dur: number): boolean {
+        if (!isFinite(dur) || dur <= 0) return false;
+        return time > dur - Math.min(dur * END_THRESHOLD_PERCENT, END_THRESHOLD_CAP_SECONDS);
     }
 
+    // Account position wins over this device's localStorage when present
+    // (same precedence as accountAutoplay), and gets written into
+    // localStorage so this device's copy starts in sync with it.
+    function restorePlaybackPosition() {
+        if (!audioId || !audioElement) return;
+        let saved: number | null;
+        if (accountPosition !== undefined && accountPosition !== null) {
+            saved = accountPosition;
+            localStorage.setItem(playbackPositionKey(audioId), String(accountPosition));
+        } else {
+            const local = localStorage.getItem(playbackPositionKey(audioId));
+            saved = local !== null ? parseFloat(local) : null;
+        }
+        hasSavedPosition = saved !== null && isFinite(saved);
+        if (saved === null || !isFinite(saved) || saved < START_THRESHOLD_SECONDS) return;
+        if (isNearEnd(saved, audioElement.duration)) return;
+        setPosition(saved);
+    }
+
+    // Fire-and-forget, matching saveAccountPreference's pattern — a
+    // logged-out viewer just gets a harmless 401 and the local save (the
+    // only copy that matters for them) already happened. keepalive matters
+    // here specifically: this fires from beforeunload and from the
+    // autoplay-driven navigation on "ended", both of which start tearing
+    // the page down in the same tick — without it, the browser aborts the
+    // in-flight request before it reaches the server.
+    function syncAccountPosition(position: number | null) {
+        if (!audioId) return;
+        fetch("/playback-position", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ audioId, position }),
+            keepalive: true,
+        }).catch(() => {});
+    }
+
+    // The one save path shared by every trigger — automatic (pause,
+    // periodic, beforeunload) and the manual button alike. There's no
+    // "manual" flag distinguishing a bookmark from automatic progress:
+    // whichever call happens last wins, same as any other save.
     function savePlaybackPosition() {
         if (!audioId || !audioElement) return;
         const time = audioElement.currentTime;
-        const dur = audioElement.duration;
-        if (time < 5 || (isFinite(dur) && dur > 0 && time > dur * 0.95)) {
-            localStorage.removeItem(playbackPositionKey(audioId));
+        if (time < START_THRESHOLD_SECONDS || isNearEnd(time, audioElement.duration)) {
+            clearPlaybackPosition();
             return;
         }
         localStorage.setItem(playbackPositionKey(audioId), String(time));
+        hasSavedPosition = true;
+        syncAccountPosition(time);
+    }
+
+    function clearPlaybackPosition() {
+        if (!audioId) return;
+        localStorage.removeItem(playbackPositionKey(audioId));
+        hasSavedPosition = false;
+        syncAccountPosition(null);
+    }
+
+    function handleManualSave() {
+        if (hasSavedPosition) {
+            clearPlaybackPosition();
+            announceStatus("Cleared saved position.");
+            return;
+        }
+        savePlaybackPosition();
+        announceStatus(
+            hasSavedPosition
+                ? "Saved your place."
+                : "Too close to the start or end of the track to save a position.",
+        );
     }
 
     let saveInterval: ReturnType<typeof setInterval> | undefined;
@@ -120,10 +205,19 @@
             }
         }
 
+        if (accountAutosave !== undefined && accountAutosave !== null) {
+            autosaveEnabled = accountAutosave;
+            localStorage.setItem("audiopub_playbackAutosave", String(accountAutosave));
+        } else {
+            autosaveEnabled = localStorage.getItem("audiopub_playbackAutosave") === "true";
+        }
+
         // Playback is most often left mid-track by navigating away rather
         // than pausing first, so the position has to be captured on unload
         // too, not just on the periodic save and the pause handler.
-        const handleBeforeUnload = () => savePlaybackPosition();
+        const handleBeforeUnload = () => {
+            if (autosaveEnabled) savePlaybackPosition();
+        };
         window.addEventListener("beforeunload", handleBeforeUnload);
         return () => {
             window.removeEventListener("beforeunload", handleBeforeUnload);
@@ -301,12 +395,12 @@
         on:pause={() => {
             isPlaying = false;
             dispatch("pause");
-            savePlaybackPosition();
+            if (autosaveEnabled) savePlaybackPosition();
         }}
         on:ended={() => {
             isPlaying = false;
             dispatch("ended");
-            if (audioId) localStorage.removeItem(playbackPositionKey(audioId));
+            clearPlaybackPosition();
             if (saveInterval) clearInterval(saveInterval);
         }}
         on:waiting={() => (isBuffering = true)}
@@ -316,7 +410,9 @@
             restorePlaybackPosition();
             if (!live && audioId) {
                 if (saveInterval) clearInterval(saveInterval);
-                saveInterval = setInterval(savePlaybackPosition, 5000);
+                saveInterval = setInterval(() => {
+                    if (autosaveEnabled) savePlaybackPosition();
+                }, 5000);
             }
         }}
     >
@@ -482,7 +578,15 @@
                 Autoplay
             </label>
         {/if}
+
+        {#if !live && audioId}
+            <button type="button" class="position-btn" on:click={handleManualSave}>
+                {hasSavedPosition ? "Clear saved position" : "Save my place"}
+            </button>
+        {/if}
     </div>
+
+    <div aria-live="polite" class="sr-only" bind:this={statusAnnouncement}></div>
 </section>
 
 <style>
@@ -588,6 +692,33 @@
         color: #444;
         cursor: pointer;
         margin-left: 0.5rem;
+    }
+
+    .position-btn {
+        background: none;
+        border: 1px solid #ccc;
+        padding: 0.3rem 0.6rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        color: #444;
+        margin-left: 0.5rem;
+    }
+
+    .position-btn:hover {
+        background-color: #ddd;
+    }
+
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
     }
 
     .live-badge {

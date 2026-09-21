@@ -254,6 +254,8 @@
         hasPrev={!!data.prevAudioId}
         audioId={data.audio.id}
         accountAutoplay={data.user?.preferences?.autoplay}
+        accountPosition={data.accountPlaybackPosition}
+        accountAutosave={data.user?.preferences?.playbackAutosave}
         sources={[
             { src: `/${data.audio.path}`, type: data.mimeType },
             { src: `/${data.audio.transcodedPath}`, type: "audio/aac" },

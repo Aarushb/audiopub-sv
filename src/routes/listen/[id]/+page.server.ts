@@ -57,6 +57,7 @@ import {
     MAX_USER_COMMENT_EDITS,
     updateCommentContent,
 } from "$lib/server/comment_edits";
+import { getPlaybackPosition } from "$lib/server/playback_position";
 
 export const load: PageServerLoad = async (event) => {
     const audio = await Audio.findByPk(event.params.id, {
@@ -186,18 +187,21 @@ export const load: PageServerLoad = async (event) => {
     let isFollowing = false;
     let favoriteCount = 0;
     let isFavorited = false;
+    let accountPlaybackPosition: number | null = null;
 
     if (event.locals.user) {
         try {
-            const [followRes, favCountRes, favRes] = await Promise.all([
+            const [followRes, favCountRes, favRes, positionRes] = await Promise.all([
                 AudioFollow.findOne({ where: { userId: event.locals.user.id, audioId: audio.id } }),
                 AudioFavorite.count({ where: { audioId: audio.id } }),
                 AudioFavorite.findOne({ where: { userId: event.locals.user.id, audioId: audio.id } }),
+                getPlaybackPosition(event.locals.user.id, audio.id),
             ]);
 
             isFollowing = !!followRes;
             favoriteCount = favCountRes;
             isFavorited = !!favRes;
+            accountPlaybackPosition = positionRes;
         } catch (err) {
             console.error("Error fetching audio interaction data:", err);
         }
@@ -264,6 +268,7 @@ export const load: PageServerLoad = async (event) => {
               }).then((chats) => chats.map((c) => c.toClientside()))
             : null,
         isSubscribed,
+        accountPlaybackPosition,
         canEdit,
         hasEdits: Boolean(viewer?.isAdmin && edits.length > 0),
         remainingEdits: viewer?.isAdmin
